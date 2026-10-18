@@ -1,0 +1,24 @@
+<!-- @dsCard group="Navigation" height=230 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TabBar — preview</title>
+<style>
+  .stage { position: relative; height: 214px; max-width: 380px; margin: 8px 16px; overflow: hidden; border-radius: var(--radius-lg); background: var(--surface); }
+  .stage .behind { position: absolute; left: 16px; top: 16px; }
+  .stage .cv-tabbar { position: absolute; left: 16px; right: 16px; bottom: 16px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  function Demo() {
+    var s = React.useState('vault');
+    return h('div', { className: 'stage' },
+      h('div', { className: 'behind' }, h(C.CreditCard, { nickname: 'HDFC Millennia', network: 'visa', last4: '4821', expiry: '08/29', face: 'jade' })),
+      h(C.TabBar, { active: s[0], onChange: s[1] }));
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

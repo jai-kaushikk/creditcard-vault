@@ -1,0 +1,15 @@
+<!-- @dsCard group="Admin" height=150 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" class="cv-row-demo"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(C.StatTile, { label: 'Transactions today', value: '1,284', delta: '8% vs last Sat', trend: 'up', deltaTone: 'good' }),
+    h(C.StatTile, { label: 'Open disputes', value: '7', delta: '3 since yesterday', trend: 'up', deltaTone: 'bad' }),
+    h(C.StatTile, { label: 'OTP share success', value: '91.4%', delta: 'flat', deltaTone: 'neutral' })));
+</script>
+</body>
+</html>

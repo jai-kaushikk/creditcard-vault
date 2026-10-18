@@ -1,0 +1,16 @@
+<!-- @dsCard group="Vault" height=440 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" class="cv-row-demo"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(C.CreditCard, { nickname: 'HDFC Millennia', network: 'visa', last4: '4821', holder: 'Aarav Mehta', expiry: '08/29', face: 'onyx', sharedWith: 'Rahul' }),
+    h(C.CreditCard, { nickname: 'Amazon Pay ICICI', network: 'visa', last4: '0937', holder: 'Aarav Mehta', expiry: '02/28', face: 'jade', revealed: true, number: '4315810000000937' }),
+    h(C.CreditCard, { nickname: 'SBI Cashback', network: 'rupay', last4: '5512', expiry: '11/27', face: 'brass', compact: true }),
+    h(C.CreditCard, { nickname: "Rahul's Axis", network: 'mastercard', last4: '7720', expiry: '05/30', face: 'slate', compact: true, sharedBy: 'Rahul' })));
+</script>
+</body>
+</html>

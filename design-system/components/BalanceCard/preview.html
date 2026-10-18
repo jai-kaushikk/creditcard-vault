@@ -1,0 +1,15 @@
+<!-- @dsCard group="Money" height=260 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" class="cv-stack-demo" style="max-width:420px"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(C.BalanceCard, { name: 'Rahul Verma', netMinor: 315000 }),
+    h(C.BalanceCard, { name: 'Priya Nair', netMinor: -120000 }),
+    h(C.BalanceCard, { name: 'Kabir Shah', netMinor: 0 })));
+</script>
+</body>
+</html>

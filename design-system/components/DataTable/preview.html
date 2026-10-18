@@ -1,0 +1,28 @@
+<!-- @dsCard group="Admin" height=260 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" style="padding:16px"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  var rows = [
+    { id: 'txn_7Hq2', lender: 'usr_8f2a91', borrower: 'usr_c41d07', amount: 240000, status: 'pending', at: '21:41' },
+    { id: 'txn_7Hp9', lender: 'usr_19ce3b', borrower: 'usr_8f2a91', amount: 120000, status: 'confirmed', at: '21:12' },
+    { id: 'txn_7Hn1', lender: 'usr_5b7e20', borrower: 'usr_a903fe', amount: 5480000, status: 'disputed', at: '20:57' }
+  ];
+  ReactDOM.createRoot(document.getElementById('root')).render(h(C.DataTable, {
+    caption: 'Recent transactions',
+    columns: [
+      { key: 'id', label: 'Transaction', mono: true },
+      { key: 'lender', label: 'Lender', mono: true },
+      { key: 'borrower', label: 'Borrower', mono: true },
+      { key: 'amount', label: 'Amount', align: 'right', render: function (r) { return C.formatMoney(r.amount); } },
+      { key: 'status', label: 'Status', render: function (r) { return h(C.StatusBadge, { status: r.status }); } },
+      { key: 'at', label: 'Created', align: 'right' }
+    ],
+    rows: rows
+  }));
+</script>
+</body>
+</html>

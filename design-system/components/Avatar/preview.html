@@ -1,0 +1,14 @@
+<!-- @dsCard group="People" height=72 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" class="cv-row-demo"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(C.Avatar, { name: 'Rahul Verma' }), h(C.Avatar, { name: 'Priya Nair' }), h(C.Avatar, { name: 'Kabir Shah' }),
+    h(C.Avatar, { name: 'Meera Iyer', size: 32 }), h(C.Avatar, { name: 'Aarav Mehta', size: 44, tone: 'vault' })));
+</script>
+</body>
+</html>

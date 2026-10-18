@@ -1,0 +1,16 @@
+<!-- @dsCard group="OTP sharing" height=560 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" style="display:flex;gap:24px;align-items:flex-end;padding:16px;flex-wrap:wrap"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  var base = { requester: 'Rahul', merchant: 'Amazon', minor: 240000, cardName: 'HDFC Millennia', cardLast4: '4821', otp: '482913', expiresIn: 161 };
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h('div', { style: { width: 360 } }, h(C.OtpShareSheet, Object.assign({ state: 'request' }, base))),
+    h('div', { style: { width: 360 } }, h(C.OtpShareSheet, Object.assign({ state: 'shared' }, base))),
+    h('div', { style: { width: 360 } }, h(C.OtpShareSheet, Object.assign({ state: 'success' }, base)))));
+</script>
+</body>
+</html>

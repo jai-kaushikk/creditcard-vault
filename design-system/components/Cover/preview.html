@@ -1,0 +1,64 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CardVault</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--surface); color: var(--ink); font-family: var(--font-sans); overflow: hidden; }
+  .cover { position: relative; width: 960px; height: 288px; overflow: hidden; }
+  .art { position: absolute; top: 0; left: 480px; width: 480px; height: 288px; overflow: hidden; }
+  .art svg { display: block; width: 480px; height: 288px; }
+  .vault { fill: var(--vault); }
+  .deep { fill: var(--ink); }
+  .brass { fill: var(--brass); }
+  .lent { fill: var(--lent); }
+  .owe { fill: var(--owe); }
+  .card { rx: var(--radius-md); }
+  .chip { fill: var(--brass); rx: var(--radius-sm); }
+  .pill { rx: 12px; }
+  .glass { fill: var(--glass-fill); stroke: var(--glass-stroke); stroke-width: 1; rx: 20px; }
+  .cut { fill: var(--surface); }
+  .words { position: absolute; left: var(--space-6); bottom: var(--space-6); max-width: 440px; }
+  .name { margin: 0; font-size: 80px; line-height: .92; font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
+  .tag { margin: var(--space-3) 0 0 3px; font-size: 14px; line-height: 20px; color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 288" width="480" height="288">
+<!--
+  blocks      vault 232×146 card slab bled off the top (the brand, largest) · ink 296×192 card bleeding off the right (the deep ground) · brass 152×88 (vault hardware) · lent 56×24 and owe 40×24 pills (the ledger's two signals, small) — ≈42% of 960×288
+  arrangement two cards fanned like a wallet stack (ink under, vault over), brass and the two money pills stepping down the left, bottoms on one line space-5 above the edge
+  pattern     embossed card digits, from "Cards are always •••• 4821": dots r3 at a space-3 pitch in groups of four with space-5 gaps, cut to surface on both cards — plus one glass-fill pill (the floating tab bar) crossing both cards
+  scales      sides in space-2 multiples; gutters space-4; dot pitch space-3, group gap space-5; corners radius-md, chip radius-sm, pills half their height
+-->
+<rect class="deep card" x="208" y="72" width="296" height="192" rx="12"/>
+<rect class="vault card" x="24" y="-24" width="232" height="146" rx="12"/>
+<rect class="brass card" x="24" y="138" width="152" height="88" rx="12"/>
+<rect class="lent pill" x="24" y="240" width="56" height="24" rx="12"/>
+<rect class="owe pill" x="96" y="240" width="40" height="24" rx="12"/>
+<rect class="chip" x="232" y="160" width="40" height="30" rx="6"/>
+<g class="cut">
+<circle cx="235" cy="222" r="3"/><circle cx="247" cy="222" r="3"/><circle cx="259" cy="222" r="3"/><circle cx="271" cy="222" r="3"/>
+<circle cx="295" cy="222" r="3"/><circle cx="307" cy="222" r="3"/><circle cx="319" cy="222" r="3"/><circle cx="331" cy="222" r="3"/>
+<circle cx="355" cy="222" r="3"/><circle cx="367" cy="222" r="3"/><circle cx="379" cy="222" r="3"/><circle cx="391" cy="222" r="3"/>
+<circle cx="415" cy="222" r="3"/><circle cx="427" cy="222" r="3"/><circle cx="439" cy="222" r="3"/><circle cx="451" cy="222" r="3"/>
+</g>
+<g class="cut">
+<circle cx="51" cy="84" r="3"/><circle cx="63" cy="84" r="3"/><circle cx="75" cy="84" r="3"/><circle cx="87" cy="84" r="3"/>
+<circle cx="111" cy="84" r="3"/><circle cx="123" cy="84" r="3"/><circle cx="135" cy="84" r="3"/><circle cx="147" cy="84" r="3"/>
+<circle cx="171" cy="84" r="3"/><circle cx="183" cy="84" r="3"/><circle cx="195" cy="84" r="3"/><circle cx="207" cy="84" r="3"/>
+</g>
+<rect class="glass" x="120" y="100" width="176" height="40" rx="20"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">CardVault</h1>
+<p class="tag">Cards stay on your phone. Debts between friends stay honest.</p>
+</div>
+</div>
+</body>
+</html>

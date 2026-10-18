@@ -1,0 +1,16 @@
+<!-- @dsCard group="Money" height=120 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" class="cv-row-demo"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(C.AmountText, { minor: 240000, direction: 'lent' }),
+    h(C.AmountText, { minor: 120000, direction: 'owe' }),
+    h(C.AmountText, { minor: 315000, direction: 'lent', size: 'md' }),
+    h(C.AmountText, { minor: 555000, direction: 'neutral', size: 'xl' })));
+</script>
+</body>
+</html>

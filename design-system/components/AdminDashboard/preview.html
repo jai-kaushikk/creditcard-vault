@@ -1,0 +1,94 @@
+<!-- @dsCard group="Screens" height=820 width=1280 page subtitle="Admin web dashboard · transactions only" -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CardVault — admin dashboard</title>
+<style>
+  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 820px; }
+  .side { background: var(--surface-raised); border-right: 1px solid var(--line); padding: var(--space-5) var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); }
+  .brand { font-size: 20px; line-height: 26px; font-weight: 700; letter-spacing: -.01em; padding: 0 var(--space-3) var(--space-5); }
+  .brand small { display: block; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--ink-muted); letter-spacing: .06em; text-transform: uppercase; }
+  .nav { display: flex; justify-content: space-between; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); font-size: 15px; line-height: 22px; font-weight: 500; color: var(--ink); }
+  .nav.on { background: var(--vault-soft); color: var(--vault); font-weight: 600; }
+  .nav .n { font-size: 12px; font-weight: 600; color: var(--danger); }
+  .main { padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+  .head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); }
+  .head h1 { margin: 0; font-size: 32px; line-height: 38px; font-weight: 700; letter-spacing: -.01em; }
+  .muted { color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--space-5); align-items: start; }
+  .panel-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-3); }
+  .panel-h b { font-size: 17px; line-height: 24px; }
+  .flags { background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-md); }
+  .flag { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--space-1); }
+  .flag:last-child { border-bottom: 0; }
+  .flag-top { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+  .flag b { font-size: 13px; line-height: 18px; }
+  .mono { font-family: var(--font-mono); font-size: 12px; }
+  .privacy { display: flex; gap: var(--space-2); align-items: center; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--vault); background: var(--vault-soft); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); }
+  .privacy svg { width: 16px; height: 16px; flex: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  var nav = [['Overview', 1], ['Transactions'], ['Disputes', 0, '7'], ['Risk flags', 0, '4'], ['Users'], ['Audit log'], ['Settings']];
+  var rows = [
+    { id: 'txn_7Hq2Lm', lender: 'usr_8f2a91', borrower: 'usr_c41d07', cat: 'Shopping', amount: 240000, status: 'pending', at: '21:41:06' },
+    { id: 'txn_7Hp9Ka', lender: 'usr_19ce3b', borrower: 'usr_8f2a91', cat: 'Food', amount: 75000, status: 'confirmed', at: '21:12:44' },
+    { id: 'txn_7Hn1Qe', lender: 'usr_5b7e20', borrower: 'usr_a903fe', cat: 'Electronics', amount: 5480000, status: 'disputed', at: '20:57:19' },
+    { id: 'txn_7Hm4Rt', lender: 'usr_c41d07', borrower: 'usr_8f2a91', cat: 'Fashion', amount: 120000, status: 'confirmed', at: '20:31:52' },
+    { id: 'txn_7Hk8Zp', lender: 'usr_77d1aa', borrower: 'usr_0e93c2', cat: 'Travel', amount: 1865000, status: 'confirmed', at: '20:02:10' },
+    { id: 'txn_7Hj2Wn', lender: 'usr_8f2a91', borrower: 'usr_c41d07', cat: 'Entertainment', amount: 98000, status: 'settled', at: '19:48:33' },
+    { id: 'txn_7Hh6Yc', lender: 'usr_3a5f19', borrower: 'usr_b2e7d4', cat: 'Shopping', amount: 349900, status: 'expired', at: '19:40:05' }
+  ];
+  var flags = [
+    ['Velocity', 'usr_19ce3b', '9 OTP shares in 60 min (limit 6)', 'pending'],
+    ['Amount', 'usr_5b7e20', '₹54,800 — above ₹50,000 review line', 'disputed'],
+    ['New pair', 'usr_0e93c2', 'First share and ₹18,650 within 2 h of friending', 'pending'],
+    ['Disagreement', 'usr_a903fe', 'Borrower marked failed, lender’s SMS says debited', 'disputed']
+  ];
+  function shield() { return h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z' })); }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'app' },
+    h('nav', { className: 'side', 'aria-label': 'Admin' },
+      h('div', { className: 'brand' }, 'CardVault', h('small', null, 'Admin')),
+      nav.map(function (n) { return h('div', { key: n[0], className: 'nav' + (n[1] ? ' on' : '') }, h('span', null, n[0]), n[2] ? h('span', { className: 'n' }, n[2]) : null); })),
+    h('main', { className: 'main' },
+      h('div', { className: 'head' },
+        h('div', null, h('div', { className: 'muted' }, 'Saturday 18 Oct 2026 · IST'), h('h1', null, 'Overview')),
+        h('div', { className: 'privacy' }, shield(), 'Transactions only — no card numbers or OTPs ever reach this server')),
+      h('div', { className: 'tiles' },
+        h(C.StatTile, { label: 'Transactions today', value: '1,284', delta: '8% vs last Sat', trend: 'up', deltaTone: 'good' }),
+        h(C.StatTile, { label: 'Value recorded today', value: '₹18.6L', delta: '5% vs last Sat', trend: 'up', deltaTone: 'good' }),
+        h(C.StatTile, { label: 'OTP share → success', value: '91.4%', delta: '0.6 pts', trend: 'down', deltaTone: 'bad' }),
+        h(C.StatTile, { label: 'Open disputes', value: '7', delta: '3 since yesterday', trend: 'up', deltaTone: 'bad' })),
+      h('div', { className: 'cols' },
+        h('section', null,
+          h('div', { className: 'panel-h' }, h('b', null, 'Recent transactions'), h('span', { className: 'muted' }, 'Live · updated 21:41')),
+          h(C.DataTable, {
+            caption: 'Recent transactions',
+            columns: [
+              { key: 'id', label: 'Transaction', mono: true },
+              { key: 'lender', label: 'Lender', mono: true },
+              { key: 'borrower', label: 'Borrower', mono: true },
+              { key: 'amount', label: 'Amount', align: 'right', render: function (r) { return C.formatMoney(r.amount); } },
+              { key: 'status', label: 'Status', render: function (r) { return h(C.StatusBadge, { status: r.status }); } },
+              { key: 'at', label: 'Created', align: 'right' }
+            ],
+            rows: rows
+          })),
+        h('section', null,
+          h('div', { className: 'panel-h' }, h('b', null, 'Risk flags'), h('span', { className: 'muted' }, '4 open')),
+          h('div', { className: 'flags' }, flags.map(function (f) {
+            return h('div', { key: f[1] + f[0], className: 'flag' },
+              h('div', { className: 'flag-top' }, h('b', null, f[0]), h(C.StatusBadge, { status: f[3] }, f[3] === 'disputed' ? 'Disputed' : 'Review')),
+              h('span', { className: 'mono' }, f[1]),
+              h('span', { className: 'muted' }, f[2]));
+          })),
+          h('div', { style: { display: 'flex', gap: 8, marginTop: 12 } }, h(C.Button, { size: 'sm', variant: 'primary' }, 'Open review queue'), h(C.Button, { size: 'sm' }, 'Export CSV')))))));
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!-- @dsCard group="Actions" height=170 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div id="root" class="cv-row-demo"></div>
+<div id="glass" style="position:relative;margin:0 16px 16px;max-width:420px;height:64px;border-radius:12px;background:var(--card-jade);display:flex;align-items:center;padding:0 12px;gap:8px"></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(C.Button, { variant: 'primary' }, 'Share OTP with Rahul'),
+    h(C.Button, null, 'Remind'),
+    h(C.Button, { variant: 'quiet' }, 'Decline'),
+    h(C.Button, { variant: 'danger' }, 'Stop sharing'),
+    h(C.Button, { size: 'sm' }, 'Settle up')));
+  ReactDOM.createRoot(document.getElementById('glass')).render(h(React.Fragment, null,
+    h(C.Button, { variant: 'glass', size: 'sm' }, '\u2039 Back'),
+    h(C.Button, { variant: 'glass', size: 'sm' }, 'Scan card')));
+</script>
+</body>
+</html>

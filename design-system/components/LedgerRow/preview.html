@@ -1,0 +1,16 @@
+<!-- @dsCard group="Money" height=260 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title></head>
+<body>
+<div class="cv-stack-demo"><div id="root" class="cv-ledger" role="list" style="max-width:420px"></div></div>
+<script>
+  var C = window.CardVault, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(C.LedgerRow, { name: 'Rahul', merchant: 'Amazon', cardLast4: '4821', minor: 240000, direction: 'lent', status: 'pending', time: 'Today, 9:41 PM' }),
+    h(C.LedgerRow, { name: 'Rahul', merchant: 'Swiggy', cardLast4: '4821', minor: 75000, direction: 'lent', status: 'confirmed', time: 'Sat, 8:02 PM' }),
+    h(C.LedgerRow, { name: 'Rahul', merchant: 'Myntra', cardLast4: '7720', minor: 120000, direction: 'owe', status: 'confirmed', time: '12 Oct' }),
+    h(C.LedgerRow, { name: 'Rahul', merchant: 'BookMyShow', cardLast4: '4821', minor: 98000, direction: 'lent', status: 'settled', time: '3 Oct' })));
+</script>
+</body>
+</html>
