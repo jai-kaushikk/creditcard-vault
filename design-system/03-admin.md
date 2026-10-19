@@ -10,7 +10,7 @@ A web app for the CardVault team to watch transaction health, resolve disputes a
 | **Transactions** | `DataTable` of every transaction, filterable by status, kind, amount range, date and account | open the detail with its full event timeline |
 | **Disputes** | queue of `disputed` rows with both sides' claims and evidence type (`sms_match` / manual) | resolve as confirmed, expired or settled, with a required note |
 | **Risk flags** | rule hits: velocity (OTP requests per hour), amount over the review line, a new friend pair with a large first payment, repeated disagreements | dismiss, suspend an account, lower a user's limits |
-| **Users** | accounts by id: status, created date, counts as lender and borrower, dispute rate | suspend or reinstate; reveal the phone hash match only with a stated reason |
+| **Users** | accounts by id: status, created date, counts as lender and borrower, dispute rate | suspend or reinstate; check an email against the stored hash only with a stated reason |
 | **Audit log** | every admin action and system transition (`transaction_events`), dense table | export |
 
 ## Rules
