@@ -22,11 +22,14 @@ class CardNfcModule : Module() {
   private fun finish(answer: (Promise) -> Unit) {
     val promise = synchronized(this) { pending.also { pending = null } } ?: return
     val activity = appContext.currentActivity
-    activity?.runOnUiThread {
-      try {
-        adapter?.disableReaderMode(activity)
-      } catch (e: Exception) {
-        // The activity may already be paused, which disables it anyway.
+    val nfc = adapter
+    if (activity != null && nfc != null) {
+      activity.runOnUiThread {
+        try {
+          nfc.disableReaderMode(activity)
+        } catch (e: Exception) {
+          // The activity may already be paused, which disables it anyway.
+        }
       }
     }
     answer(promise)
@@ -65,8 +68,8 @@ class CardNfcModule : Module() {
     Function("isEnabled") { adapter?.isEnabled == true }
 
     Function("openSettings") {
-      val activity = appContext.currentActivity ?: return@Function
-      activity.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+      appContext.currentActivity?.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+      null
     }
 
     AsyncFunction("readCard") { promise: Promise ->

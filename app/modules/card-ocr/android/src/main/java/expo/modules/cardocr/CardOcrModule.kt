@@ -34,6 +34,7 @@ class CardOcrModule : Module() {
       client().process(image)
         .addOnSuccessListener { text -> promise.resolve(text.textBlocks.flatMap { block -> block.lines.map { it.text } }) }
         .addOnFailureListener { e -> promise.reject("ERR_OCR", e.message ?: "Text recognition failed.", e) }
+      Unit
     }
 
     OnDestroy {
