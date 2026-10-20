@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.cardvault'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.cardocr"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}
+
+dependencies {
+  // Bundled Latin model: no download on first use, works offline.
+  implementation 'com.google.mlkit:text-recognition:16.0.1'
+}

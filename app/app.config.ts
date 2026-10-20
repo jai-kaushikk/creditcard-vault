@@ -30,6 +30,7 @@ const config: ExpoConfig = {
     supportsTablet: false,
     infoPlist: {
       NSFaceIDUsageDescription: 'CardVault uses Face ID to unlock your vault and reveal card numbers.',
+      NSCameraUsageDescription: 'CardVault uses the camera to read your card number. Photos stay on your phone and are deleted right away.',
     },
   },
   android: {
@@ -42,7 +43,14 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
     allowBackup: false,
-    permissions: ['android.permission.USE_BIOMETRIC', 'android.permission.USE_FINGERPRINT', 'android.permission.POST_NOTIFICATIONS'],
+    permissions: [
+      'android.permission.USE_BIOMETRIC',
+      'android.permission.USE_FINGERPRINT',
+      'android.permission.POST_NOTIFICATIONS',
+      'android.permission.CAMERA',
+    ],
+    // The card scanner takes photos only; it never needs the microphone.
+    blockedPermissions: ['android.permission.RECORD_AUDIO'],
     intentFilters: apiHost
       ? [{
           action: 'VIEW',
@@ -69,6 +77,14 @@ const config: ExpoConfig = {
     ['@react-native-google-signin/google-signin', { iosUrlScheme }],
     // Local notifications only for now; server push (FCM / APNs) comes later.
     ['expo-notifications', { color: '#0f5c4a', enableRemoteNotifications: false }],
+    [
+      'expo-camera',
+      {
+        cameraPermission: 'CardVault uses the camera to read your card number. Photos stay on your phone and are deleted right away.',
+        recordAudioAndroid: false,
+        barcodeScannerEnabled: false,
+      },
+    ],
     './plugins/withAndroidBuild',
   ],
   experiments: {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { formatMoney, parseAmount } from './money.ts';
 import { cardNumberInput, detectNetwork, expiryInput, formatCardNumber, luhnValid, normaliseExpiry } from './cardNumber.ts';
 import { parseBankSms } from './sms.ts';
+import { parseCardText } from './cardScan.ts';
 import { effectiveStatus, netWith, ownerTodo, totals, type Txn } from './ledger.ts';
 
 test('formatMoney uses Indian grouping for INR', () => {
@@ -87,4 +88,17 @@ test('bank SMS: finds the OTP and the amount', () => {
   assert.deepEqual(parseBankSms(sbi), { otp: '9921', amountMinor: 315000 });
   assert.deepEqual(parseBankSms(' 123456 '), { otp: '123456', amountMinor: null });
   assert.deepEqual(parseBankSms('Your card ending 4821 was used on 12/10/26'), { otp: null, amountMinor: null });
+});
+
+test('card scan: reads number, expiry and name from OCR lines, fixing lookalike letters', () => {
+  const hdfc = ['HDFC BANK', 'Millennia', '4315 81OO 2290 4829', 'VALID', 'FROM 08/24', 'THRU 08/29', 'AARAV MEHTA', 'VISA'];
+  assert.deepEqual(parseCardText(hdfc), { number: '4315810022904829', expiry: '08/29', holder: 'AARAV MEHTA' });
+  const amex = ['AMERICAN EXPRESS', '3782 822463 10005', 'MEMBER SINCE 19', 'VALID THRU 12/2030', 'PRIYA NAIR'];
+  assert.deepEqual(parseCardText(amex), { number: '378282246310005', expiry: '12/30', holder: 'PRIYA NAIR' });
+  // A misread digit fails the Luhn check, so nothing is filled in rather than a wrong number.
+  assert.equal(parseCardText(['4315 8100 2290 4821']).number, null);
+  // Split across two lines (embossed cards).
+  assert.equal(parseCardText(['5241 9300', '5518 7724', 'O5/3O']).number, '5241930055187724');
+  assert.equal(parseCardText(['5241 9300', '5518 7724', 'O5/3O']).expiry, '05/30');
+  assert.deepEqual(parseCardText(['Customer care 1800 202 6161', 'www.hdfcbank.com']), { number: null, expiry: null, holder: null });
 });
