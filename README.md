@@ -47,7 +47,7 @@ design-system/  CardVault design system: tokens, components, product and archite
 3. **Create credentials → OAuth client ID → Android** with
    - package name `app.cardvault`
    - SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` (the key the CI builds are signed with until you add your own; see section 3).
-4. Set `GOOGLE_WEB_CLIENT_ID` at the top of `.github/workflows/android.yml` to the web client ID from step 2.
+4. Set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` at the top of `.github/workflows/android.yml` to the web client ID from step 2.
 5. Re-run the workflow (**Actions → Test and build APK → Run workflow**). The new APK shows "Continue with Google".
 
 ### 2. The server (needed for friends, sharing and OTPs between phones)
