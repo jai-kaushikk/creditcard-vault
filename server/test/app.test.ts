@@ -23,7 +23,7 @@ async function setup() {
   if (pgUrl) {
     const pg = new PgStore(pgUrl);
     await pg.migrate();
-    await pg.query('truncate relay_messages, transaction_events, transactions, accounts');
+    await pg.query('truncate relay_messages, transaction_events, transactions, invites, friendships, accounts');
     store = pg;
     mailbox = new PgRelay(pg, () => clock);
   } else {
@@ -39,18 +39,24 @@ async function setup() {
     verifyGoogle: async (token) => {
       const [sub, email] = token.split('|');
       if (!email) throw new Error('bad token');
-      return { sub, email };
+      return { sub, email, name: `${sub[0].toUpperCase()}${sub.slice(1)} Test`, picture: null };
     },
   });
   const signIn = async (sub: string, email: string) => {
     const res = await app.inject({ method: 'POST', url: '/v1/auth/google', payload: { idToken: `${sub}|${email}`, publicKey: KEY } });
     assert.equal(res.statusCode, 200, res.body);
     const { token, userId } = res.json();
-    const call = (method: 'GET' | 'POST', url: string, payload?: unknown) =>
+    const call = (method: 'GET' | 'POST' | 'DELETE', url: string, payload?: unknown) =>
       app.inject({ method, url, payload: payload as object, headers: { authorization: `Bearer ${token}` } });
-    return { userId: userId as string, call };
+    return { userId: userId as string, email, call };
   };
-  return { app, store, signIn, tick: (ms: number) => (clock += ms) };
+  type Person = Awaited<ReturnType<typeof signIn>>;
+  /** x asks, y accepts. */
+  const befriend = async (x: Person, y: Person) => {
+    assert.equal((await x.call('POST', '/v1/friends/requests', { email: y.email })).statusCode, 201);
+    assert.equal((await y.call('POST', `/v1/friends/${x.userId}/accept`)).statusCode, 200);
+  };
+  return { app, store, signIn, befriend, tick: (ms: number) => (clock += ms) };
 }
 
 test('requires a valid session', async () => {
@@ -62,14 +68,10 @@ test('requires a valid session', async () => {
 });
 
 test('full flow: share card, request OTP, relay it, confirm, then repay', async () => {
-  const { signIn, store } = await setup();
+  const { signIn, befriend, store } = await setup();
   const aarav = await signIn('g-aarav', 'Aarav@Example.com');
   const rahul = await signIn('g-rahul', 'rahul@example.com');
-
-  // Friend lookup by email is case-insensitive and returns only id + public key.
-  const found = await rahul.call('POST', '/v1/users/lookup', { email: 'aarav@example.com' });
-  assert.deepEqual(found.json(), { id: aarav.userId, publicKey: KEY });
-  assert.equal((await rahul.call('POST', '/v1/users/lookup', { email: 'nobody@example.com' })).statusCode, 404);
+  await befriend(rahul, aarav);
 
   // Card share goes through the mailbox once and is gone after delivery.
   assert.equal((await aarav.call('POST', '/v1/mailbox', { to: rahul.userId, kind: 'card_share', payload: sealed })).statusCode, 201);
@@ -130,9 +132,10 @@ test('full flow: share card, request OTP, relay it, confirm, then repay', async 
 });
 
 test('disagreement becomes a dispute; silence expires the request', async () => {
-  const { signIn, tick } = await setup();
+  const { signIn, befriend, tick } = await setup();
   const a = await signIn('a', 'a@x.com');
   const b = await signIn('b', 'b@x.com');
+  await befriend(a, b);
   const ask = async (key: string) =>
     (await b.call('POST', '/v1/transactions', { lenderId: a.userId, amountMinor: 1000, currency: 'INR', merchant: 'Shop', cardRef: 'c', idempotencyKey: key })).json();
 
@@ -153,9 +156,10 @@ test('disagreement becomes a dispute; silence expires the request', async () => 
 });
 
 test('a borrower success stands after 24 hours without objection', async () => {
-  const { signIn, tick } = await setup();
+  const { signIn, befriend, tick } = await setup();
   const a = await signIn('a', 'a@x.com');
   const b = await signIn('b', 'b@x.com');
+  await befriend(a, b);
   const t = (await b.call('POST', '/v1/transactions', { lenderId: a.userId, amountMinor: 5000, currency: 'INR', merchant: 'Cafe', cardRef: 'c', idempotencyKey: 'k' })).json();
   await a.call('POST', `/v1/transactions/${t.id}/otp`, { payload: sealed });
   await b.call('POST', `/v1/transactions/${t.id}/result`, { outcome: 'success' });
@@ -164,9 +168,10 @@ test('a borrower success stands after 24 hours without objection', async () => {
 });
 
 test('limits: velocity per card owner, amount cap, no self-requests', async () => {
-  const { signIn } = await setup();
+  const { signIn, befriend } = await setup();
   const a = await signIn('a', 'a@x.com');
   const b = await signIn('b', 'b@x.com');
+  await befriend(a, b);
   const ask = (key: string, amountMinor = 1000, lenderId = a.userId) =>
     b.call('POST', '/v1/transactions', { lenderId, amountMinor, currency: 'INR', merchant: 'Shop', cardRef: 'c', idempotencyKey: key });
   for (let i = 0; i < 6; i++) assert.equal((await ask(`v${i}`)).statusCode, 201);
@@ -176,9 +181,10 @@ test('limits: velocity per card owner, amount cap, no self-requests', async () =
 });
 
 test('relayed messages are delivered once and expire unread', async () => {
-  const { signIn, tick } = await setup();
+  const { signIn, befriend, tick } = await setup();
   const a = await signIn('a', 'a@x.com');
   const b = await signIn('b', 'b@x.com');
+  await befriend(a, b);
   await a.call('POST', '/v1/mailbox', { to: b.userId, kind: 'card_share', payload: sealed });
   const t = (await b.call('POST', '/v1/transactions', { lenderId: a.userId, amountMinor: 1000, currency: 'INR', merchant: 'Shop', cardRef: 'c', idempotencyKey: 'k' })).json();
   await a.call('POST', `/v1/transactions/${t.id}/otp`, { payload: sealed });
@@ -186,4 +192,74 @@ test('relayed messages are delivered once and expire unread', async () => {
   const msgs = (await b.call('GET', '/v1/mailbox')).json().messages;
   assert.deepEqual(msgs.map((m: { kind: string }) => m.kind), ['card_share']);
   assert.deepEqual((await b.call('GET', '/v1/mailbox')).json().messages, []);
+});
+
+test('friend requests go both ways and gate sharing', async () => {
+  const { signIn } = await setup();
+  const a = await signIn('asha', 'Asha@X.com');
+  const b = await signIn('bilal', 'bilal@x.com');
+  const c = await signIn('chen', 'chen@x.com');
+
+  // Strangers can't share cards or ask for OTPs.
+  assert.equal((await a.call('POST', '/v1/mailbox', { to: b.userId, kind: 'card_share', payload: sealed })).statusCode, 403);
+  const ask = () => b.call('POST', '/v1/transactions', { lenderId: a.userId, amountMinor: 1000, currency: 'INR', merchant: 'Shop', cardRef: 'c', idempotencyKey: `k${Math.random()}` });
+  assert.equal((await ask()).statusCode, 403);
+
+  // Unknown emails get a 404 that suggests an invite; your own email is refused.
+  assert.equal((await a.call('POST', '/v1/friends/requests', { email: 'nobody@x.com' })).statusCode, 404);
+  assert.equal((await a.call('POST', '/v1/friends/requests', { email: 'asha@x.com' })).statusCode, 400);
+
+  // Asha asks Bilal (email is case-insensitive). Each side sees it from their end, with names and emails.
+  const sent = await a.call('POST', '/v1/friends/requests', { email: 'BILAL@x.com' });
+  assert.equal(sent.statusCode, 201);
+  assert.equal(sent.json().friend.name, 'Bilal Test');
+  assert.deepEqual((await a.call('GET', '/v1/friends')).json().friends.map((f: { state: string }) => f.state), ['outgoing']);
+  const incoming = (await b.call('GET', '/v1/friends')).json().friends;
+  assert.equal(incoming[0].state, 'incoming');
+  assert.equal(incoming[0].email, 'asha@x.com');
+  // Still not friends until Bilal accepts; Asha can't accept her own request.
+  assert.equal((await ask()).statusCode, 403);
+  assert.equal((await a.call('POST', `/v1/friends/${b.userId}/accept`)).statusCode, 404);
+  assert.equal((await b.call('POST', `/v1/friends/${a.userId}/accept`)).statusCode, 200);
+  assert.equal((await a.call('GET', '/v1/friends')).json().friends[0].state, 'friend');
+  assert.equal((await ask()).statusCode, 201);
+
+  // Asking someone who already asked you accepts it.
+  await c.call('POST', '/v1/friends/requests', { email: 'asha@x.com' });
+  assert.equal((await a.call('POST', '/v1/friends/requests', { email: 'chen@x.com' })).json().state, 'friend');
+
+  // Unfriending closes the door again, but a stop-sharing message still gets through.
+  assert.equal((await b.call('DELETE', `/v1/friends/${a.userId}`)).statusCode, 200);
+  assert.equal((await ask()).statusCode, 403);
+  assert.equal((await a.call('POST', '/v1/mailbox', { to: b.userId, kind: 'card_unshare', payload: sealed })).statusCode, 201);
+  // Profiles are only visible to people you're connected with.
+  assert.equal((await b.call('GET', `/v1/users/${c.userId}`)).statusCode, 404);
+  assert.equal((await a.call('GET', `/v1/users/${c.userId}`)).json().email, 'chen@x.com');
+});
+
+test('invite links make friends in one tap and expire', async () => {
+  const { app, signIn, tick } = await setup();
+  const a = await signIn('asha', 'asha@x.com');
+  const b = await signIn('bilal', 'bilal@x.com');
+
+  const { code } = (await a.call('POST', '/v1/invites')).json();
+  assert.match(code, /^[A-Za-z0-9_-]{12}$/);
+  // The same link comes back while it's fresh.
+  assert.equal((await a.call('POST', '/v1/invites')).json().code, code);
+
+  // Anyone with the link sees whose it is, without signing in, and nothing more.
+  const peek = await app.inject({ method: 'GET', url: `/v1/invites/${code}` });
+  assert.equal(peek.statusCode, 200);
+  assert.equal(peek.json().name, 'Asha');
+  assert.equal(peek.json().email, undefined);
+  assert.equal((await app.inject({ method: 'GET', url: '/v1/invites/nope' })).statusCode, 404);
+
+  assert.equal((await a.call('POST', `/v1/invites/${code}/accept`)).statusCode, 400);
+  const joined = await b.call('POST', `/v1/invites/${code}/accept`);
+  assert.equal(joined.json().state, 'friend');
+  assert.equal((await a.call('GET', '/v1/friends')).json().friends[0].state, 'friend');
+
+  tick(15 * 24 * 60 * 60 * 1000);
+  assert.equal((await app.inject({ method: 'GET', url: `/v1/invites/${code}` })).statusCode, 404);
+  assert.notEqual((await a.call('POST', '/v1/invites')).json().code, code);
 });

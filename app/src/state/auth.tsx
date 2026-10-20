@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, clearSession, loadSession } from '@/lib/api';
+import { api, clearSession, loadSession, setUnauthorizedHandler } from '@/lib/api';
 import { googleConfigured, serverConfigured } from '@/lib/config';
 import { myPublicKey } from '@/lib/crypto';
 import { googleSignIn, googleSignOut, type GoogleProfile } from '@/lib/google';
@@ -22,6 +22,8 @@ type Ctx = {
   signInWithIdToken: (idToken: string, profile: GoogleProfile) => Promise<void>;
   continueOffline: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Why the app signed you out, if it did. Cards on the device are kept. */
+  notice: string | null;
 };
 
 const KEY = 'cv.user.v1';
@@ -30,6 +32,20 @@ const AuthContext = createContext<Ctx | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<Ctx['status']>('loading');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const endSession = useCallback(async (why: string) => {
+    await clearSession();
+    await remove(KEY);
+    setUser(null);
+    setStatus('signedOut');
+    setNotice(why);
+  }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => endSession('Your session ended. Sign in again; your cards are still here.'));
+    return () => setUnauthorizedHandler(null);
+  }, [endSession]);
 
   useEffect(() => {
     (async () => {
@@ -37,8 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const saved = await getJSON<User>(KEY);
       setUser(saved);
       setStatus(saved ? 'signedIn' : 'signedOut');
+      // Accounts made before the server kept emails need one more sign-in so friends can find them.
+      if (saved?.mode === 'google' && serverConfigured) {
+        const me = await api.me().catch(() => null);
+        if (me && !me.email) await endSession('Sign in once more so friends can find you by email.');
+      }
     })().catch(() => setStatus('signedOut'));
-  }, []);
+  }, [endSession]);
 
   const save = useCallback(async (u: User) => {
     await setJSON(KEY, u);
@@ -53,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const session = await api.signInWithGoogle(idToken, await myPublicKey());
       id = session.userId;
     }
+    setNotice(null);
     await save({ id, email: profile.email, name: profile.name ?? profile.email.split('@')[0], photo: profile.photo, mode: 'google' });
   }, [save]);
 
@@ -79,8 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const value = useMemo(
-    () => ({ status, user, signInWithGoogle, signInWithIdToken, continueOffline, signOut }),
-    [status, user, signInWithGoogle, signInWithIdToken, continueOffline, signOut],
+    () => ({ status, user, signInWithGoogle, signInWithIdToken, continueOffline, signOut, notice }),
+    [status, user, signInWithGoogle, signInWithIdToken, continueOffline, signOut, notice],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -12,7 +12,9 @@ import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Banner } from '@/components/Banner';
 import { LockScreen } from '@/components/LockScreen';
+import { onNotificationTap } from '@/lib/notify';
 import { AuthProvider } from '@/state/auth';
 import { DataProvider } from '@/state/data';
 import { LockProvider, useLock } from '@/state/lock';
@@ -66,6 +68,9 @@ function Shell() {
     else ScreenCapture.preventScreenCaptureAsync('app').catch(() => {});
   }, [settings.hideInSwitcher]);
 
+  // Tapping a system notification opens what it's about.
+  useEffect(() => onNotificationTap(), []);
+
   return (
     <View style={{ flex: 1, backgroundColor: c.surface }}>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
@@ -75,7 +80,7 @@ function Shell() {
         <Stack.Screen name="otp/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom', contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen name="settle/[friendId]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom', contentStyle: { backgroundColor: 'transparent' } }} />
       </Stack>
-      {locked ? <LockScreen /> : null}
+      {locked ? <LockScreen /> : <Banner />}
     </View>
   );
 }

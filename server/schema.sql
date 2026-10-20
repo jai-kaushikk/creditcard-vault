@@ -1,5 +1,6 @@
--- CardVault keeps transactions only. Card numbers, CVVs, OTPs, names and
--- balances never reach this database in readable form. The one exception is
+-- CardVault keeps accounts (Google email, name and photo, so friends can find
+-- each other), friendships and transactions. Card numbers, CVVs and OTPs never
+-- reach this database in readable form. The one place they pass through is
 -- relay_messages: sealed (end-to-end encrypted) card shares and OTPs waiting
 -- for delivery, deleted when fetched and expired after minutes to a day.
 
@@ -10,6 +11,31 @@ create table if not exists accounts (
   status      text not null default 'active',
   created_at  timestamptz not null default now()
 );
+-- Added after launch; filled in on each Google sign-in.
+alter table accounts add column if not exists email text;
+alter table accounts add column if not exists name text;
+alter table accounts add column if not exists photo_url text;
+create unique index if not exists accounts_email on accounts (lower(email));
+
+create table if not exists friendships (       -- one row per pair, user_a < user_b
+  user_a        text not null references accounts(id),
+  user_b        text not null references accounts(id),
+  requested_by  text not null references accounts(id),
+  status        text not null check (status in ('pending', 'accepted')),
+  created_at    timestamptz not null default now(),
+  accepted_at   timestamptz,
+  primary key (user_a, user_b),
+  check (user_a < user_b)
+);
+create index if not exists friendships_b on friendships (user_b);
+
+create table if not exists invites (           -- "add me on CardVault" links
+  code        text primary key,
+  from_id     text not null references accounts(id),
+  created_at  timestamptz not null,
+  expires_at  timestamptz not null
+);
+create index if not exists invites_from on invites (from_id, expires_at desc);
 
 create table if not exists transactions (
   id               text primary key,

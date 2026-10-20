@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { Amount, Notice, Panel, SectionHeader } from '@/components/bits';
+import { Bell } from '@/components/Bell';
 import { Button } from '@/components/Button';
 import { CreditCardView } from '@/components/CreditCardView';
 import { Glass } from '@/components/Glass';
@@ -34,12 +35,15 @@ export default function VaultScreen() {
     <Screen tabs>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <T variant="display" accessibilityRole="header">Vault</T>
-        <Glass>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6 }}>
-            <Icon name="lock" size={14} color={c.vault} strokeWidth={2} />
-            <T variant="caption" color="vault" style={{ fontFamily: fonts.semibold }}>{data.demo ? 'Demo' : isWeb ? 'Encrypted' : 'Locked'}</T>
-          </View>
-        </Glass>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Glass>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Icon name="lock" size={14} color={c.vault} strokeWidth={2} />
+              <T variant="caption" color="vault" style={{ fontFamily: fonts.semibold }}>{data.demo ? 'Demo' : isWeb ? 'Encrypted' : 'Locked'}</T>
+            </View>
+          </Glass>
+          <Bell />
+        </View>
       </View>
 
       {todos.map((t) => {

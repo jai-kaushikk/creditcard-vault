@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatMoney, parseAmount } from './money.ts';
-import { detectNetwork, formatCardNumber, luhnValid, normaliseExpiry } from './cardNumber.ts';
+import { cardNumberInput, detectNetwork, expiryInput, formatCardNumber, luhnValid, normaliseExpiry } from './cardNumber.ts';
+import { parseBankSms } from './sms.ts';
 import { effectiveStatus, netWith, ownerTodo, totals, type Txn } from './ledger.ts';
 
 test('formatMoney uses Indian grouping for INR', () => {
@@ -58,4 +59,32 @@ test('unanswered OTP requests expire after three minutes', () => {
   assert.equal(ownerTodo(fresh, 'me', now), 'share_otp');
   assert.equal(ownerTodo({ ...fresh, otpSharedAt: 'x', borrowerResult: 'success' }, 'me', now), 'confirm_charge');
   assert.equal(ownerTodo(fresh, 'rahul', now), null);
+});
+
+test('card number input stops at the network length', () => {
+  assert.equal(cardNumberInput('4315 8100 2290 4821 9999'), '4315810022904821');
+  assert.equal(cardNumberInput('378282246310005123'), '378282246310005');
+  assert.equal(cardNumberInput('3056930902590412'), '30569309025904');
+});
+
+test('expiry gets its slash as you type, and loses it on backspace', () => {
+  assert.equal(expiryInput('1', ''), '1');
+  assert.equal(expiryInput('12', '1'), '12/');
+  assert.equal(expiryInput('4', ''), '04/');
+  assert.equal(expiryInput('12/2', '12/'), '12/2');
+  assert.equal(expiryInput('12/29', '12/2'), '12/29');
+  assert.equal(expiryInput('12/290', '12/29'), '12/29');
+  assert.equal(expiryInput('12', '12/'), '1');
+  assert.equal(expiryInput('0829', ''), '08/29');
+});
+
+test('bank SMS: finds the OTP and the amount', () => {
+  const hdfc = 'OTP is 482913 for txn of INR 2,400.00 at AMAZON on HDFC Bank card ending 4821. Valid till 10:42. Do not share OTP for security reasons.';
+  assert.deepEqual(parseBankSms(hdfc), { otp: '482913', amountMinor: 240000 });
+  const icici = '519027 is the OTP for transaction of Rs.750.50 on your ICICI Bank Credit Card XX0937 at SWIGGY. OTPs are SECRET.';
+  assert.deepEqual(parseBankSms(icici), { otp: '519027', amountMinor: 75050 });
+  const sbi = 'Dear Customer, use one time password 9921 to complete your purchase of Rs 3150 at Myntra. SBI Card';
+  assert.deepEqual(parseBankSms(sbi), { otp: '9921', amountMinor: 315000 });
+  assert.deepEqual(parseBankSms(' 123456 '), { otp: '123456', amountMinor: null });
+  assert.deepEqual(parseBankSms('Your card ending 4821 was used on 12/10/26'), { otp: null, amountMinor: null });
 });

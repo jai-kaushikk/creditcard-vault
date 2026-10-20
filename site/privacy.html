@@ -21,14 +21,16 @@
     <p>CardVault is built so that we hold as little about you as possible. Your card details never reach our servers in a form we can read. This policy explains what we do collect, why, and your choices.</p>
 
     <h2>What stays on your phone</h2>
-    <p>Card numbers, expiry dates, CVVs, card nicknames, your friends’ names, and your balances are stored only on your device, in the operating system’s secure keystore (Android Keystore or iOS Keychain). We never receive them.</p>
+    <p>Card numbers, expiry dates, CVVs, card nicknames and your balances are stored only on your device, in the operating system’s secure keystore (Android Keystore or iOS Keychain). We never receive them.</p>
 
     <h2>What our server stores</h2>
     <div class="table-wrap">
     <table>
       <tr><th>Data</th><th>Why</th></tr>
       <tr><td>An account ID derived from a one-way hash of your Google account ID</td><td>To sign you in and tell your transactions apart</td></tr>
-      <tr><td>A one-way hash of your email address</td><td>So friends who know your email can find you; we cannot read the address back from it</td></tr>
+      <tr><td>Your Google email address, name and profile photo</td><td>So friends can find you by email and recognise you in their friend list, requests and ledger</td></tr>
+      <tr><td>Your friend list: who you asked, who accepted, and when</td><td>Card shares and OTP requests only go between people who are both friends</td></tr>
+      <tr><td>Invite link codes you create, and when they expire (14 days)</td><td>So the person you invite can add you in one tap</td></tr>
       <tr><td>Your device’s public encryption key</td><td>So friends can encrypt card shares and OTPs that only your phone can open</td></tr>
       <tr><td>Transactions: amount, currency, the merchant name you type, status, timestamps, the account IDs of both people, and a random card reference</td><td>To keep a shared, accurate ledger between you and your friends</td></tr>
       <tr><td>An audit history of each transaction’s status changes</td><td>To resolve disputes and keep the ledger honest</td></tr>
@@ -37,13 +39,13 @@
     <p>The card reference is a random value created on your phone. It is not your card number or any part of it.</p>
 
     <h2>Server logs</h2>
-    <p>Like any web service, our server writes request logs (time, the address the request came from, which endpoint was called, and the result) to Google Cloud Logging, which keeps them for up to 30 days. They are used only to keep the service running and secure, and never contain card details, OTPs, or your email address.</p>
+    <p>Like any web service, our server writes request logs (time, the address the request came from, which endpoint was called, and the result) to Google Cloud Logging, which keeps them for up to 30 days. They are used only to keep the service running and secure, and never contain card details or OTPs. Friend requests send the email in the request body, so it doesn’t appear in these logs.</p>
 
     <h2>Card shares and OTPs</h2>
     <p>When you share a card or an OTP with a friend, it is encrypted on your phone so that only their phone can decrypt it. Our server holds the encrypted message until their phone collects it, then deletes it. Undelivered messages are deleted automatically, OTPs after 5 minutes and card shares after 24 hours. We cannot read these messages.</p>
 
     <h2>Google sign-in</h2>
-    <p>CardVault uses Google Sign-In and asks only for your basic profile and email. Google gives us a signed token that we check, and we keep only the hashes described above. Your name and photo stay on your phone. We do not access any other Google data.</p>
+    <p>CardVault uses Google Sign-In and asks only for your basic profile and email. Google gives us a signed token that we check, and we keep your email, name and photo as described above. Your friends on CardVault, and people you send a friend request to, see your name, email and photo. Anyone with your invite link sees your first name and photo. We do not access any other Google data.</p>
 
     <h2>What we don’t do</h2>
     <p>We don’t sell or rent your data, show ads, use third-party analytics or trackers, or share your data with anyone, except where the law requires it.</p>

@@ -10,6 +10,12 @@ const SESSION_KEY = 'cv.session.v1';
 export type Session = { token: string; userId: string };
 
 let session: Session | null = null;
+let onUnauthorized: (() => void) | null = null;
+
+/** Called when the server rejects the session, so the app can ask for sign-in again. */
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
 
 export async function loadSession(): Promise<Session | null> {
   session = await getJSON<Session>(SESSION_KEY);
@@ -32,18 +38,22 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const res = await fetch(`${config.apiUrl}${path}`, {
     method,
     headers: {
-      'content-type': 'application/json',
+      // Only with a body: Fastify rejects an empty body labelled as JSON.
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       ...(session ? { authorization: `Bearer ${session.token}` } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
+  if (res.status === 401 && session && path !== '/v1/auth/google') onUnauthorized?.();
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Request failed (${res.status})`);
   return data as T;
 }
 
-export type PublicUser = { id: string; publicKey: string };
+export type Profile = { id: string; email: string | null; name: string | null; photo: string | null };
+export type FriendRow = Profile & { publicKey: string; state: 'friend' | 'incoming' | 'outgoing'; since: string };
+export type InvitePeek = { name: string; photo: string | null; expiresAt: string };
 export type MailMessage = {
   id: string;
   from: string;
@@ -60,8 +70,16 @@ export const api = {
     await setJSON(SESSION_KEY, s);
     return s;
   },
-  lookupByEmail: (email: string) => call<PublicUser>('POST', '/v1/users/lookup', { email }),
-  getUser: (id: string) => call<PublicUser>('GET', `/v1/users/${encodeURIComponent(id)}`),
+  me: () => call<Profile>('GET', '/v1/me'),
+  friends: () => call<{ friends: FriendRow[] }>('GET', '/v1/friends'),
+  requestFriend: (email: string) => call<{ state: FriendRow['state']; friend: Profile }>('POST', '/v1/friends/requests', { email }),
+  acceptFriend: (id: string) => call<{ state: 'friend' }>('POST', `/v1/friends/${encodeURIComponent(id)}/accept`, {}),
+  /** Declines, cancels or unfriends. */
+  removeFriend: (id: string) => call<{ ok: true }>('DELETE', `/v1/friends/${encodeURIComponent(id)}`),
+  getUser: (id: string) => call<Profile & { publicKey: string }>('GET', `/v1/users/${encodeURIComponent(id)}`),
+  createInvite: () => call<{ code: string; expiresAt: string }>('POST', '/v1/invites', {}),
+  peekInvite: (code: string) => call<InvitePeek>('GET', `/v1/invites/${encodeURIComponent(code)}`),
+  acceptInvite: (code: string) => call<{ state: 'friend'; friend: Profile }>('POST', `/v1/invites/${encodeURIComponent(code)}/accept`, {}),
   transactions: () => call<{ transactions: Txn[] }>('GET', '/v1/transactions'),
   requestOtp: (body: { lenderId: string; amountMinor: number; currency: string; merchant: string; cardRef: string; idempotencyKey: string }) =>
     call<Txn>('POST', '/v1/transactions', body),

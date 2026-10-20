@@ -27,7 +27,10 @@ if (process.env.STORE === 'memory') {
 }
 
 const webDir = process.env.WEB_DIR ?? new URL('../web', import.meta.url).pathname;
-const app = buildApp({ store, mailbox, verifyGoogle: googleVerifier(webClientId), secret, logger: true, webDir });
+// Until a release keystore exists, CI signs APKs with the standard React Native debug key.
+const DEBUG_KEY_SHA256 = 'FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C';
+const androidCertSha256 = (process.env.ANDROID_CERT_SHA256 || DEBUG_KEY_SHA256).split(',').map((x) => x.trim()).filter(Boolean);
+const app = buildApp({ store, mailbox, verifyGoogle: googleVerifier(webClientId), secret, logger: true, webDir, androidCertSha256 });
 const port = Number(process.env.PORT ?? 8080);
 await app.listen({ port, host: '0.0.0.0' });
 

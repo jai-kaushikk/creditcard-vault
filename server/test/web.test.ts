@@ -21,6 +21,7 @@ test('serves the web app next to the API', async (t) => {
     secret: 'test-secret-that-is-at-least-32-characters-long',
     verifyGoogle: async () => { throw new Error('unused'); },
     webDir: dir,
+    androidCertSha256: ['AA:BB'],
   });
 
   const home = await app.inject({ method: 'GET', url: '/' });
@@ -49,4 +50,9 @@ test('serves the web app next to the API', async (t) => {
   assert.deepEqual(api.json(), { error: 'Not found' });
   assert.equal((await app.inject({ method: 'GET', url: '/v1/transactions' })).statusCode, 401);
   assert.equal((await app.inject({ method: 'GET', url: '/health' })).json().ok, true);
+
+  // Android App Links: the app's package and signing key, as JSON.
+  const links = await app.inject({ method: 'GET', url: '/.well-known/assetlinks.json' });
+  assert.match(links.headers['content-type'] as string, /application\/json/);
+  assert.deepEqual(links.json()[0].target, { namespace: 'android_app', package_name: 'app.cardvault', sha256_cert_fingerprints: ['AA:BB'] });
 });

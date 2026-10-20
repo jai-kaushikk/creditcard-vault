@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { accountIdFor, emailHash, issueSession, readSession, type VerifyGoogle } from './auth.ts';
 import { Mailbox, type Relay, type Sealed } from './mailbox.ts';
 import * as rules from './rules.ts';
-import type { Store } from './store.ts';
+import { pair, type Account, type Friendship, type Store } from './store.ts';
 import { registerWeb } from './web.ts';
 
 export type Deps = {
@@ -16,7 +16,11 @@ export type Deps = {
   logger?: boolean;
   /** Folder holding the exported web app. Served when it has an index.html. */
   webDir?: string;
+  /** Signing-certificate SHA-256s of the Android app, so invite links open it directly (App Links). */
+  androidCertSha256?: string[];
 };
+
+const ANDROID_PACKAGE = 'app.cardvault';
 
 const sealedSchema = {
   type: 'object',
@@ -31,6 +35,13 @@ const sealedSchema = {
 const id = { type: 'string', minLength: 1, maxLength: 64 } as const;
 const amount = { type: 'integer', minimum: 1, maximum: rules.MAX_AMOUNT_MINOR } as const;
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' } as const;
+const email = { type: 'string', minLength: 3, maxLength: 320 } as const;
+
+const INVITE_DAYS = 14;
+const MAX_PENDING_REQUESTS = 50;
+
+/** What friends (and people with a pending request) see of each other. */
+const profile = (a: Account) => ({ id: a.id, email: a.email, name: a.name, photo: a.photo, publicKey: a.publicKey });
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -88,7 +99,34 @@ export function buildApp(deps: Deps) {
     return saved;
   };
 
+  const areFriends = async (x: string, y: string) => (await store.friendship(x, y))?.status === 'accepted';
+  const requireFriend = async (me: string, other: string, what: string) => {
+    if (!(await areFriends(me, other))) throw new rules.RuleError(403, `You can only ${what} friends on CardVault.`);
+  };
+  const befriend = async (x: string, y: string, requestedBy: string, prev: Friendship | null) => {
+    const [a, b] = pair(x, y);
+    const at = new Date(now()).toISOString();
+    await store.saveFriendship({ a, b, requestedBy: prev?.requestedBy ?? requestedBy, status: 'accepted', createdAt: prev?.createdAt ?? at, acceptedAt: at });
+  };
+
   app.get('/health', async () => ({ ok: true }));
+
+  // Lets Android open https://…/invite/… links straight in the app when it's installed.
+  app.get('/.well-known/assetlinks.json', async (_req, reply) => {
+    reply.header('cache-control', 'public, max-age=3600');
+    return [{
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: { namespace: 'android_app', package_name: ANDROID_PACKAGE, sha256_cert_fingerprints: deps.androidCertSha256 ?? [] },
+    }];
+  });
+
+  // Public, so the invite page can say who it's from before anyone signs in.
+  app.get<{ Params: { code: string } }>('/v1/invites/:code', async (req, reply) => {
+    const inv = await store.inviteByCode(req.params.code);
+    const from = inv && Date.parse(inv.expiresAt) > now() ? await store.accountById(inv.fromId) : null;
+    if (!from || from.status !== 'active') return reply.code(404).send({ error: 'This invite has expired. Ask for a new link.' });
+    return { name: from.name?.split(' ')[0] ?? 'A friend', photo: from.photo, expiresAt: inv!.expiresAt };
+  });
   if (deps.webDir) registerWeb(app, deps.webDir);
 
   app.post<{ Body: { idToken: string; publicKey: string } }>('/v1/auth/google', {
@@ -107,26 +145,106 @@ export function buildApp(deps: Deps) {
       return reply.code(401).send({ error: 'Google sign-in could not be verified.' });
     }
     const userId = accountIdFor(identity.sub, secret);
-    await store.upsertAccount({ id: userId, emailHash: emailHash(identity.email, secret), publicKey: req.body.publicKey });
+    await store.upsertAccount({
+      id: userId,
+      emailHash: emailHash(identity.email, secret),
+      email: identity.email.trim().toLowerCase(),
+      name: identity.name?.trim() || null,
+      photo: identity.picture ?? null,
+      publicKey: req.body.publicKey,
+    });
     return { token: await issueSession(userId, secret), userId };
   });
 
   app.register(async (priv) => {
     priv.addHook('preHandler', auth);
 
-    // POST so the email travels in the body, never in a URL that request logs record.
-    priv.post<{ Body: { email: string } }>('/v1/users/lookup', {
-      schema: { body: { type: 'object', required: ['email'], properties: { email: { type: 'string', maxLength: 320 } } } },
+    priv.get('/v1/me', async (req) => {
+      const a = (await store.accountById(req.userId))!;
+      return { id: a.id, email: a.email, name: a.name, photo: a.photo };
+    });
+
+    priv.get('/v1/friends', async (req) => {
+      const links = await store.friendshipsOf(req.userId);
+      const other = (f: Friendship) => (f.a === req.userId ? f.b : f.a);
+      const people = new Map((await store.accountsByIds(links.map(other))).map((a) => [a.id, a]));
+      return {
+        friends: links.flatMap((f) => {
+          const a = people.get(other(f));
+          if (!a || a.status !== 'active') return [];
+          const state = f.status === 'accepted' ? 'friend' : f.requestedBy === req.userId ? 'outgoing' : 'incoming';
+          return [{ ...profile(a), state, since: f.acceptedAt ?? f.createdAt }];
+        }),
+      };
+    });
+
+    // A friend request by email. The email goes in the body, never in a URL that request logs record.
+    priv.post<{ Body: { email: string } }>('/v1/friends/requests', {
+      schema: { body: { type: 'object', required: ['email'], properties: { email } } },
     }, async (req, reply) => {
-      const a = await store.accountByEmailHash(emailHash(req.body.email, secret));
-      if (!a || a.status !== 'active') return reply.code(404).send({ error: 'Not found' });
-      return { id: a.id, publicKey: a.publicKey };
+      const to = await store.accountByEmailHash(emailHash(req.body.email, secret));
+      if (!to || to.status !== 'active') {
+        return reply.code(404).send({ error: 'Nobody with that email is on CardVault yet. Send them an invite link instead.' });
+      }
+      if (to.id === req.userId) throw new rules.RuleError(400, 'That’s you.');
+      const prev = await store.friendship(req.userId, to.id);
+      if (prev?.status === 'accepted') return { state: 'friend', friend: profile(to) };
+      // They already asked us: asking back accepts.
+      if (prev && prev.requestedBy === to.id) {
+        await befriend(req.userId, to.id, to.id, prev);
+        return { state: 'friend', friend: profile(to) };
+      }
+      if (prev) return { state: 'outgoing', friend: profile(to) };
+      const mine = (await store.friendshipsOf(req.userId)).filter((f) => f.status === 'pending' && f.requestedBy === req.userId);
+      if (mine.length >= MAX_PENDING_REQUESTS) throw new rules.RuleError(429, 'You have a lot of requests waiting. Wait for some to be answered.');
+      const [a, b] = pair(req.userId, to.id);
+      await store.saveFriendship({ a, b, requestedBy: req.userId, status: 'pending', createdAt: new Date(now()).toISOString(), acceptedAt: null });
+      return reply.code(201).send({ state: 'outgoing', friend: profile(to) });
+    });
+
+    priv.post<{ Params: { id: string } }>('/v1/friends/:id/accept', async (req) => {
+      const prev = await store.friendship(req.userId, req.params.id);
+      if (!prev || prev.requestedBy === req.userId) throw new rules.RuleError(404, 'No friend request from them.');
+      if (prev.status !== 'accepted') await befriend(req.userId, req.params.id, prev.requestedBy, prev);
+      return { state: 'friend' };
+    });
+
+    // Declines a request, cancels one you sent, or unfriends.
+    priv.delete<{ Params: { id: string } }>('/v1/friends/:id', async (req) => {
+      await store.deleteFriendship(req.userId, req.params.id);
+      return { ok: true };
     });
 
     priv.get<{ Params: { id: string } }>('/v1/users/:id', async (req, reply) => {
-      const a = await store.accountById(req.params.id);
+      const f = await store.friendship(req.userId, req.params.id);
+      const a = f ? await store.accountById(req.params.id) : null;
       if (!a) return reply.code(404).send({ error: 'Not found' });
-      return { id: a.id, publicKey: a.publicKey };
+      return profile(a);
+    });
+
+    // Your current invite link code; a new one once the last expires.
+    priv.post('/v1/invites', async (req) => {
+      const last = await store.latestInviteFrom(req.userId);
+      if (last && Date.parse(last.expiresAt) - now() > 24 * 60 * 60 * 1000) return { code: last.code, expiresAt: last.expiresAt };
+      const inv = {
+        code: randomBytes(9).toString('base64url'),
+        fromId: req.userId,
+        createdAt: new Date(now()).toISOString(),
+        expiresAt: new Date(now() + INVITE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+      };
+      await store.addInvite(inv);
+      return { code: inv.code, expiresAt: inv.expiresAt };
+    });
+
+    // Opening someone's invite link and tapping Add: both sides have said yes.
+    priv.post<{ Params: { code: string } }>('/v1/invites/:code/accept', async (req) => {
+      const inv = await store.inviteByCode(req.params.code);
+      const from = inv && Date.parse(inv.expiresAt) > now() ? await store.accountById(inv.fromId) : null;
+      if (!from || from.status !== 'active') throw new rules.RuleError(404, 'This invite has expired. Ask for a new link.');
+      if (from.id === req.userId) throw new rules.RuleError(400, 'That’s your own invite link.');
+      const prev = await store.friendship(req.userId, from.id);
+      if (prev?.status !== 'accepted') await befriend(req.userId, from.id, from.id, prev);
+      return { state: 'friend', friend: profile(from) };
     });
 
     priv.get('/v1/transactions', async (req) => {
@@ -161,6 +279,7 @@ export function buildApp(deps: Deps) {
         if (b.lenderId === req.userId) throw new rules.RuleError(400, 'You can’t request an OTP from yourself.');
         const lender = await store.accountById(b.lenderId);
         if (!lender || lender.status !== 'active') throw new rules.RuleError(404, 'That card’s owner isn’t on CardVault.');
+        await requireFriend(req.userId, b.lenderId, 'ask for OTPs from');
         const hourAgo = new Date(now() - 60 * 60 * 1000).toISOString();
         if ((await store.countRecentRequests(b.lenderId, hourAgo)) >= rules.MAX_REQUESTS_PER_LENDER_PER_HOUR) {
           throw new rules.RuleError(429, 'Too many OTP requests for this card owner right now. Try again later.');
@@ -243,6 +362,7 @@ export function buildApp(deps: Deps) {
         if (existing) return existing;
         if (b.counterpartyId === req.userId) throw new rules.RuleError(400, 'You can’t repay yourself.');
         if (!(await store.accountById(b.counterpartyId))) throw new rules.RuleError(404, 'No such friend.');
+        await requireFriend(req.userId, b.counterpartyId, 'settle up with');
         const iAmPaid = b.role === 'payee';
         const t: rules.Txn = {
           id: `txn_${randomUUID().replace(/-/g, '').slice(0, 12)}`,
@@ -286,6 +406,8 @@ export function buildApp(deps: Deps) {
     }, async (req, reply) => {
       if (req.body.to === req.userId) throw new rules.RuleError(400, 'That’s you.');
       if (!(await store.accountById(req.body.to))) throw new rules.RuleError(404, 'No such friend.');
+      // Stopping a share always gets through, even after unfriending.
+      if (req.body.kind === 'card_share') await requireFriend(req.userId, req.body.to, 'share cards with');
       const m = await mailbox.send({ from: req.userId, ...req.body });
       return reply.code(201).send({ id: m.id });
     });

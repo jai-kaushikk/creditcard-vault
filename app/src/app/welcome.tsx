@@ -15,7 +15,7 @@ import { useTheme } from '@/state/settings';
 export default function Welcome() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { status, continueOffline } = useAuth();
+  const { status, continueOffline, notice } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
   if (status === 'signedIn') return <Redirect href="/" />;
@@ -45,6 +45,7 @@ export default function Welcome() {
       </T>
       <View style={{ flex: 1 }} />
       <View style={{ gap: 8 }}>
+        {notice && !error ? <Notice tone="info" icon="lock" title={notice} /> : null}
         {error ? <Notice tone="bad" icon="alert" title="Couldn’t sign in" body={error} /> : null}
         <GoogleButton onError={setError} />
         {!googleConfigured ? (

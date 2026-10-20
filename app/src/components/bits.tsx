@@ -1,4 +1,4 @@
-import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 import { formatMoney } from '@/lib/money';
 import type { TxnStatus } from '@/lib/ledger';
 import { useTheme } from '@/state/settings';
@@ -6,7 +6,7 @@ import { fonts, radius } from '@/theme/tokens';
 import { Icon } from './Icon';
 import { T } from './Text';
 
-export function Avatar({ name, size = 40, tone }: { name: string; size?: number; tone?: 'vault' | 'lent' | 'owe' | 'neutral' }) {
+export function Avatar({ name, size = 40, tone, photo }: { name: string; size?: number; tone?: 'vault' | 'lent' | 'owe' | 'neutral'; photo?: string | null }) {
   const { c } = useTheme();
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
@@ -14,6 +14,9 @@ export function Avatar({ name, size = 40, tone }: { name: string; size?: number;
   const bg = { vault: c.vaultSoft, lent: c.lentSoft, owe: c.oweSoft, neutral: c.surfaceSunken }[t];
   const fg = { vault: c.vault, lent: c.lent, owe: c.owe, neutral: c.ink }[t];
   const initials = name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('') || '?';
+  if (photo) {
+    return <Image accessibilityIgnoresInvertColors source={{ uri: photo }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg }} />;
+  }
   return (
     <View accessibilityElementsHidden importantForAccessibility="no" style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
       <T color={fg} style={{ fontFamily: fonts.bold, fontSize: Math.round(size * 0.38), lineHeight: Math.round(size * 0.5) }}>{initials}</T>

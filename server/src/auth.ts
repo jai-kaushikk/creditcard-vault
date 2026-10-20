@@ -2,7 +2,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { jwtVerify, SignJWT } from 'jose';
 
-export type GoogleIdentity = { sub: string; email: string };
+export type GoogleIdentity = { sub: string; email: string; name?: string | null; picture?: string | null };
 export type VerifyGoogle = (idToken: string) => Promise<GoogleIdentity>;
 
 /** Checks a Google ID token was issued to our web client and the email is verified. */
@@ -12,7 +12,7 @@ export function googleVerifier(webClientId: string): VerifyGoogle {
     const ticket = await client.verifyIdToken({ idToken, audience: webClientId });
     const p = ticket.getPayload();
     if (!p?.sub || !p.email || !p.email_verified) throw new Error('Google account email is not verified.');
-    return { sub: p.sub, email: p.email };
+    return { sub: p.sub, email: p.email, name: p.name ?? null, picture: p.picture ?? null };
   };
 }
 

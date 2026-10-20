@@ -33,7 +33,7 @@ What works depends on two settings baked into the build (see [Setup](#setup)):
 
 ```
 app/            Expo (React Native) app for Android, iOS and the web
-server/         API: stores transactions only; relays sealed card shares and OTPs. Also serves the web app
+server/         API: accounts, friendships and transactions; relays sealed card shares and OTPs. Also serves the web app
 design-system/  CardVault design system: tokens, components, product and architecture specs
 .github/        CI: tests, then the server + web deploy and the APK build and release
 ```
@@ -78,7 +78,11 @@ CI signs with the standard React Native debug key so Google sign-in has a stable
 4. **Recorded only on success.** They report the result and you confirm the charge. Then the transaction is *confirmed*: +lent for you, −owed for them. If you disagree, it becomes *disputed*. If nobody shares an OTP within 3 minutes, it *expires* and nothing is recorded.
 5. **Settle up** by recording a repayment (UPI, cash…). The other person confirms it.
 
-The server's database holds `transactions`, an append-only `transaction_events` audit log, and a minimal `accounts` table (an id derived from a hash of the Google account, an email hash for friend lookup, and the public key). No names, card data, OTPs or balances. Sealed card shares and OTPs wait in `relay_messages` as ciphertext only the recipient's phone can open, and are deleted when fetched or when they expire.
+**Friends** connect both ways: send a friend request to someone's Google email and they accept it, or share your invite link (`…/invite/<code>`, valid 14 days). On Android with the app installed the link opens the app; otherwise it offers the APK download or the web version. Cards and OTP requests only go between accepted friends, and the server enforces that.
+
+**Notifications:** OTP requests, OTPs arriving, friend requests and recorded payments show as a banner in the app, in the bell list, and as system notifications while the app is open or recently backgrounded.
+
+The server's database holds `accounts` (your Google email, name and photo, so friends can find and recognise you, plus your phone's public key), `friendships` (requests and accepted friends), `invites` (invite link codes, 14 days), `transactions` and an append-only `transaction_events` audit log. No card data, OTPs or balances. Sealed card shares and OTPs wait in `relay_messages` as ciphertext only the recipient's phone can open, and are deleted when fetched or when they expire.
 
 ## Development
 
@@ -93,8 +97,8 @@ cd server && npm ci && npm run typecheck && npm test   # TEST_DATABASE_URL=… t
 ## Known limits in this version
 
 - **Android only for downloads.** The same code builds for iOS, but installing it needs an Apple developer account (TestFlight / EAS). Until then iPhones use the browser version.
-- **OTP entry is manual:** the owner pastes or types it. Reading the bank SMS automatically (Android SMS User Consent) is a next step. iOS doesn't allow it at all.
-- **Updates arrive by polling** every few seconds while the app is open. There are no push notifications yet.
+- **OTP entry is paste-based:** the owner copies the bank SMS and CardVault picks out the OTP and checks the amount (on Android it fills in as soon as you come back to the app). Reading the SMS with one tap (Android SMS User Consent) is a next step. iOS doesn't allow it at all.
+- **Notifications need the app running:** updates arrive by polling (every 4 s in front, 20 s in the background). Once Android closes the app, nothing arrives until it's opened. Real push needs Firebase Cloud Messaging, which is the next step.
 - The admin dashboard is designed (`design-system/03-admin.md`) but not built yet.
 
 ## Privacy

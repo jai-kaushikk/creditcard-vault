@@ -9,5 +9,9 @@ export const config = {
   apiUrl: builtInApi || (Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : ''),
 };
 
+/** Where people without the app get it. */
+export const ANDROID_DOWNLOAD_URL = 'https://github.com/jai-kaushikk/creditcard-vault/releases/latest';
+export const ANDROID_PACKAGE = 'app.cardvault';
+
 export const googleConfigured = config.googleWebClientId.length > 0;
 export const serverConfigured = config.apiUrl.length > 0;

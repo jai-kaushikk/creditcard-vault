@@ -8,14 +8,15 @@
 | --- | --- | --- |
 | Card number, expiry, CVV, nickname, face | owner's phone (and the borrower's phone while shared) | `expo-secure-store` (iOS Keychain / Android Keystore), this-device-only, behind the app's biometric lock |
 | OTP | owner's phone, then the borrower's phone for one view | never written to disk; end-to-end encrypted in transit |
-| Shared-card payload, OTP in transit | relay mailbox (Redis), **not the database** | sealed to the recipient's public key; 5-minute TTL for OTPs, 24-hour for card shares; deleted on delivery |
+| Shared-card payload, OTP in transit | PostgreSQL `relay_messages`, ciphertext only | sealed to the recipient's public key; 5-minute TTL for OTPs, 24-hour for card shares; deleted on delivery |
 | Transactions and their events | **PostgreSQL** | the only business data on the server |
-| Account identity | PostgreSQL `accounts` | needed to route and sign in: an id derived from the Google account, an HMAC of the email (for friend lookup), the public key. Nothing else |
-| Balances, friend list, display names | phones | computed or stored locally from transactions and contacts |
+| Account identity | PostgreSQL `accounts` | an id derived from the Google account, the Google email, name and photo (so friends can find and recognise each other), an HMAC of the email for lookup, the public key |
+| Friendships, invite links | PostgreSQL `friendships`, `invites` | two-way: a request by email that the other person accepts, or an invite link (14 days) the other person opens. Sharing and OTP requests are refused between non-friends |
+| Balances | phones | computed locally from transactions |
 
 ## Sign-in
 
-Google Sign-In on the phone; the server verifies the Google ID token against its web client ID and issues its own session token. Friends find each other by the email they use with Google. The implemented schema and API live in `server/` (`schema.sql`, `src/app.ts`).
+Google Sign-In on the phone; the server verifies the Google ID token against its web client ID and issues its own session token. Friends find each other by the email they use with Google, or by an invite link that opens the app (Android App Links via `/.well-known/assetlinks.json`) or, without it, offers the APK or the web version. The implemented schema and API live in `server/` (`schema.sql`, `src/app.ts`).
 
 ## Clients
 
@@ -29,6 +30,9 @@ Google Sign-In on the phone; the server verifies the Google ID token against its
 create table accounts (
   id            uuid primary key,
   email_hash    text unique not null,       -- HMAC(lower-cased Google email), for friend lookup
+  email         text,                       -- Google email, name and photo, shown to friends
+  name          text,
+  photo_url     text,
   public_key    bytea not null,
   status        text not null default 'active',  -- active | suspended
   created_at    timestamptz not null default now()
@@ -88,4 +92,4 @@ All calls require a signed device session. Writes carry an idempotency key. Rate
 
 - **Card and bank rules.** Most issuer terms and card network rules make the cardholder liable for, and often prohibit, letting someone else use their card or sharing an OTP. Get legal review in each market you launch in. Consider an issuer-supported path (add-on or virtual cards) as the long-term model.
 - **Storing CVV and full numbers.** This is on-device only, like a password manager, but app-store reviewers and regulators may still ask. Keep CVV optional and off by default when sharing.
-- **Data protection.** Email hashes and transaction history are personal data. Plan for consent, export and deletion requests (deletion anonymises the account and keeps the other party's ledger intact).
+- **Data protection.** Emails, names, friend lists and transaction history are personal data. Plan for consent, export and deletion requests (deletion anonymises the account and keeps the other party's ledger intact).

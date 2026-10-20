@@ -66,7 +66,7 @@ export default function ShareCard() {
         {data.friends.length ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {data.friends.map((f) => (
-              <Chip key={f.id} label={f.name.split(' ')[0]} selected={f.id === friendId} onPress={() => setFriendId(f.id)} left={<Avatar name={f.name} size={34} />} />
+              <Chip key={f.id} label={f.name.split(' ')[0]} selected={f.id === friendId} onPress={() => setFriendId(f.id)} left={<Avatar name={f.name} photo={f.photo} size={34} />} />
             ))}
           </View>
         ) : (

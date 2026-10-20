@@ -1,19 +1,20 @@
 import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Platform, View } from 'react-native';
 import { Notice } from '@/components/bits';
 import { Button } from '@/components/Button';
 import { Facts, Sheet } from '@/components/layout';
+import { OtpInput } from '@/components/OtpInput';
 import { T } from '@/components/Text';
 import { OTP_TTL_MS } from '@/lib/ledger';
 import { formatMoney } from '@/lib/money';
+import { parseBankSms } from '@/lib/sms';
 import { useNow } from '@/lib/useNow';
 import { useData } from '@/state/data';
 import { useLock } from '@/state/lock';
 import { useTheme } from '@/state/settings';
 import { useVault } from '@/state/vault';
-import { radius, type as typo } from '@/theme/tokens';
 import { usePreventCapture } from '@/lib/platform';
 
 export default function OtpRequest() {
@@ -26,9 +27,42 @@ export default function OtpRequest() {
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [smsCheck, setSmsCheck] = useState<{ tone: 'good' | 'bad' | 'info'; title: string } | null>(null);
   const now = useNow(1000);
 
   const txn = data.txns.find((t) => t.id === id);
+  const waitingForOtp = !!txn && txn.status === 'pending' && !txn.otpSharedAt;
+
+  /** Reads a copied bank SMS (or just the code) and checks its amount against the request. */
+  const fromClipboard = async (auto: boolean) => {
+    const text = await Clipboard.getStringAsync().catch(() => '');
+    const sms = parseBankSms(text);
+    if (!sms.otp) {
+      if (!auto) setSmsCheck({ tone: 'info', title: 'No OTP in what you copied. Copy the bank SMS and try again.' });
+      return;
+    }
+    setOtp(sms.otp);
+    if (sms.amountMinor && txn) {
+      setSmsCheck(sms.amountMinor === txn.amountMinor
+        ? { tone: 'good', title: `The SMS is for ${formatMoney(sms.amountMinor)}, which matches the request.` }
+        : { tone: 'bad', title: `The SMS is for ${formatMoney(sms.amountMinor)}, but the request is for ${formatMoney(txn.amountMinor)}. Check before you share.` });
+    } else {
+      setSmsCheck({ tone: 'info', title: auto ? 'Filled in from the SMS you copied. Check it matches.' : 'Pasted. Check it matches the SMS.' });
+    }
+  };
+  const fromClipboardRef = useRef(fromClipboard);
+  useEffect(() => {
+    fromClipboardRef.current = fromClipboard;
+  });
+
+  // Android: copy the SMS in Messages, come back, and the OTP is already filled in.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !waitingForOtp) return;
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') fromClipboardRef.current(true);
+    });
+    return () => sub.remove();
+  }, [waitingForOtp]);
   if (!txn) {
     return (
       <Sheet kicker="OTP request" title="This request is gone">
@@ -105,30 +139,14 @@ export default function OtpRequest() {
   const valid = /^\d{4,8}$/.test(otp);
   return (
     <Sheet kicker="OTP request" title={`${who} needs an OTP`}>
-      <T variant="body" color="inkMuted">Your bank just texted you a one-time password. Type or paste it here to send it to {who}.</T>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.surfaceSunken, borderRadius: radius.md, paddingHorizontal: 16 }}>
-        <TextInput
-          accessibilityLabel="One-time password"
-          value={otp}
-          onChangeText={(v) => setOtp(v.replace(/\D/g, '').slice(0, 8))}
-          keyboardType="number-pad"
-          autoComplete="sms-otp"
-          textContentType="oneTimeCode"
-          placeholder="••••••"
-          placeholderTextColor={c.inkMuted}
-          autoFocus
-          style={[typo.otp, { flex: 1, color: c.ink, height: 64 }]}
-        />
-        <Button
-          size="sm"
-          label="Paste"
-          onPress={async () => {
-            const text = await Clipboard.getStringAsync();
-            const m = text.match(/\b\d{4,8}\b/);
-            if (m) setOtp(m[0]);
-          }}
-        />
-      </View>
+      <T variant="body" color="inkMuted">Your bank just texted you a one-time password. Type it, or paste the SMS, to send it to {who}.</T>
+      <OtpInput value={otp} onChange={(v) => { setOtp(v); setSmsCheck(null); }} autoFocus />
+      <Button size="sm" icon="copy" label="Paste from SMS" onPress={() => fromClipboard(false)} />
+      {smsCheck ? <Notice tone={smsCheck.tone} icon={smsCheck.tone === 'good' ? 'check' : 'alert'} title={smsCheck.title} /> : (
+        <T variant="caption" color="inkMuted" style={{ textAlign: 'center' }}>
+          Tip: copy the whole bank SMS. CardVault picks out the OTP and checks the amount.
+        </T>
+      )}
       <View>
         <View style={{ height: 4, borderRadius: 2, backgroundColor: c.line, overflow: 'hidden' }}>
           <View style={{ height: 4, width: `${(left / (OTP_TTL_MS / 1000)) * 100}%`, backgroundColor: c.brass }} />

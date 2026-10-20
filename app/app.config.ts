@@ -7,6 +7,15 @@ const iosUrlScheme = iosClientId
   ? `com.googleusercontent.apps.${iosClientId.replace('.apps.googleusercontent.com', '')}`
   : 'com.googleusercontent.apps.not-configured';
 
+// Invite links (https://<server>/invite/<code>) open the app directly when it's installed.
+const apiHost = (() => {
+  try {
+    return process.env.EXPO_PUBLIC_API_URL ? new URL(process.env.EXPO_PUBLIC_API_URL).host : null;
+  } catch {
+    return null;
+  }
+})();
+
 const config: ExpoConfig = {
   name: 'CardVault',
   slug: 'cardvault',
@@ -33,7 +42,15 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
     allowBackup: false,
-    permissions: ['android.permission.USE_BIOMETRIC', 'android.permission.USE_FINGERPRINT'],
+    permissions: ['android.permission.USE_BIOMETRIC', 'android.permission.USE_FINGERPRINT', 'android.permission.POST_NOTIFICATIONS'],
+    intentFilters: apiHost
+      ? [{
+          action: 'VIEW',
+          autoVerify: true,
+          data: [{ scheme: 'https', host: apiHost, pathPrefix: '/invite/' }],
+          category: ['BROWSABLE', 'DEFAULT'],
+        }]
+      : [],
   },
   web: {
     output: 'single',
@@ -50,6 +67,8 @@ const config: ExpoConfig = {
     'expo-secure-store',
     ['expo-local-authentication', { faceIDPermission: 'CardVault uses Face ID to unlock your vault and reveal card numbers.' }],
     ['@react-native-google-signin/google-signin', { iosUrlScheme }],
+    // Local notifications only for now; server push (FCM / APNs) comes later.
+    ['expo-notifications', { color: '#0f5c4a', enableRemoteNotifications: false }],
     './plugins/withAndroidBuild',
   ],
   experiments: {

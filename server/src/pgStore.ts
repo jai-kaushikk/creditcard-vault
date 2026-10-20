@@ -3,7 +3,7 @@ import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { TTL, type MailMessage, type OutgoingMail, type Relay } from './mailbox.ts';
 import type { Txn } from './rules.ts';
-import type { Account, Store, TxnEvent } from './store.ts';
+import { pair, type Account, type Friendship, type Invite, type NewAccount, type Store, type TxnEvent } from './store.ts';
 
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v == null ? null : String(v));
 
@@ -34,10 +34,28 @@ function toAccount(r: Record<string, unknown>): Account {
   return {
     id: String(r.id),
     emailHash: String(r.email_hash),
+    email: (r.email as string) ?? null,
+    name: (r.name as string) ?? null,
+    photo: (r.photo_url as string) ?? null,
     publicKey: String(r.public_key),
     status: r.status as Account['status'],
     createdAt: iso(r.created_at)!,
   };
+}
+
+function toFriendship(r: Record<string, unknown>): Friendship {
+  return {
+    a: String(r.user_a),
+    b: String(r.user_b),
+    requestedBy: String(r.requested_by),
+    status: r.status as Friendship['status'],
+    createdAt: iso(r.created_at)!,
+    acceptedAt: iso(r.accepted_at),
+  };
+}
+
+function toInvite(r: Record<string, unknown>): Invite {
+  return { code: String(r.code), fromId: String(r.from_id), createdAt: iso(r.created_at)!, expiresAt: iso(r.expires_at)! };
 }
 
 export class PgStore implements Store {
@@ -57,14 +75,52 @@ export class PgStore implements Store {
     await this.pool.query(sql);
   }
 
-  async upsertAccount(a: Omit<Account, 'createdAt' | 'status'>) {
+  async upsertAccount(a: NewAccount) {
     const { rows } = await this.pool.query(
-      `insert into accounts (id, email_hash, public_key) values ($1, $2, $3)
-       on conflict (id) do update set email_hash = excluded.email_hash, public_key = excluded.public_key
+      `insert into accounts (id, email_hash, email, name, photo_url, public_key) values ($1, $2, $3, $4, $5, $6)
+       on conflict (id) do update set email_hash = excluded.email_hash, email = excluded.email, name = excluded.name,
+         photo_url = excluded.photo_url, public_key = excluded.public_key
        returning *`,
-      [a.id, a.emailHash, a.publicKey],
+      [a.id, a.emailHash, a.email, a.name, a.photo, a.publicKey],
     );
     return toAccount(rows[0]);
+  }
+  async accountsByIds(ids: string[]) {
+    if (!ids.length) return [];
+    const { rows } = await this.pool.query('select * from accounts where id = any($1)', [ids]);
+    return rows.map(toAccount);
+  }
+  async friendship(x: string, y: string) {
+    const { rows } = await this.pool.query('select * from friendships where user_a = $1 and user_b = $2', pair(x, y));
+    return rows[0] ? toFriendship(rows[0]) : null;
+  }
+  async friendshipsOf(userId: string) {
+    const { rows } = await this.pool.query('select * from friendships where user_a = $1 or user_b = $1', [userId]);
+    return rows.map(toFriendship);
+  }
+  async saveFriendship(f: Friendship) {
+    await this.pool.query(
+      `insert into friendships (user_a, user_b, requested_by, status, created_at, accepted_at) values ($1, $2, $3, $4, $5, $6)
+       on conflict (user_a, user_b) do update set requested_by = excluded.requested_by, status = excluded.status,
+         created_at = excluded.created_at, accepted_at = excluded.accepted_at`,
+      [f.a, f.b, f.requestedBy, f.status, f.createdAt, f.acceptedAt],
+    );
+  }
+  async deleteFriendship(x: string, y: string) {
+    await this.pool.query('delete from friendships where user_a = $1 and user_b = $2', pair(x, y));
+  }
+  async addInvite(i: Invite) {
+    await this.pool.query('insert into invites (code, from_id, created_at, expires_at) values ($1, $2, $3, $4)', [
+      i.code, i.fromId, i.createdAt, i.expiresAt,
+    ]);
+  }
+  async inviteByCode(code: string) {
+    const { rows } = await this.pool.query('select * from invites where code = $1', [code]);
+    return rows[0] ? toInvite(rows[0]) : null;
+  }
+  async latestInviteFrom(userId: string) {
+    const { rows } = await this.pool.query('select * from invites where from_id = $1 order by expires_at desc limit 1', [userId]);
+    return rows[0] ? toInvite(rows[0]) : null;
   }
   async accountById(id: string) {
     const { rows } = await this.pool.query('select * from accounts where id = $1', [id]);

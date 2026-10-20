@@ -1,21 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
-import { api } from '@/lib/api';
-import { serverConfigured } from '@/lib/config';
+import { api, type FriendRow, type MailMessage } from '@/lib/api';
+import { config, serverConfigured } from '@/lib/config';
 import { open, randomId, seal } from '@/lib/crypto';
-import { effectiveStatus, netWith, totals, type Txn } from '@/lib/ledger';
+import { effectiveStatus, netWith, OTP_TTL_MS, totals, type Txn } from '@/lib/ledger';
+import { formatMoney } from '@/lib/money';
+import { enableSystemNotifications, systemNotify } from '@/lib/notify';
 import { getJSON, setJSON } from '@/lib/secure';
 import { useNow } from '@/lib/useNow';
 import { useAuth } from './auth';
 import { useLock } from './lock';
 import { useVault, type Card } from './vault';
 
-export type Friend = { id: string; name: string; email: string; publicKey: string; demo?: boolean };
+export type Friend = { id: string; name: string; email: string; photo?: string | null; publicKey: string; demo?: boolean };
+export type FriendRequest = { id: string; name: string; email: string; photo?: string | null; direction: 'incoming' | 'outgoing'; at: string };
+export type AppNotification = { id: string; title: string; body: string; href?: string; at: string; read: boolean };
 export type OutgoingShare = {
   id: string;
   cardId: string;
   friendId: string;
+  /** Kept so the share can still be stopped after unfriending. */
+  friendPublicKey?: string;
   limitMinor: number;
   endsAt: string;
   includeCvv: boolean;
@@ -31,11 +37,19 @@ type CardSharePayload = {
   endsAt: string;
 };
 
+/** Something that might deserve a notification; `key` makes each one fire once. */
+type Candidate = { key: string; title: string; body: string; href?: string };
+
 const FRIENDS = 'cv.friends.v1';
+const FORMER = 'cv.friends.former.v1';
 const SHARES = 'cv.shares.v1';
 const TXNS = 'cv.txns.v1';
 const DEMO = 'cv.demo.v1';
+const NOTES = 'cv.notifications.v1';
+const SEEN = 'cv.notifications.seen.v1';
 const POLL_MS = 4000;
+/** In the background (Android keeps the app alive for a while; browsers keep tabs running) sync less often. */
+const BACKGROUND_POLL_MS = 20_000;
 
 type Ctx = {
   me: string;
@@ -45,13 +59,26 @@ type Ctx = {
   /** Shared clock, updated every few seconds. */
   now: number;
   friends: Friend[];
+  requests: FriendRequest[];
   friend: (id: string) => Friend | undefined;
   txns: Txn[];
   shares: OutgoingShare[];
   otpFor: (txnId: string) => string | undefined;
   net: (friendId: string) => number;
   totals: { owedToMe: number; iOwe: number };
-  addFriend: (email: string, name: string) => Promise<Friend>;
+  notifications: AppNotification[];
+  unread: number;
+  /** The newest notification, shown as a banner while the app is open. */
+  banner: AppNotification | null;
+  dismissBanner: () => void;
+  markAllRead: () => void;
+  requestFriend: (email: string) => Promise<'friend' | 'outgoing' | 'incoming'>;
+  acceptFriend: (id: string) => Promise<void>;
+  /** Declines a request or cancels one you sent. */
+  declineFriend: (id: string) => Promise<void>;
+  removeFriend: (id: string) => Promise<void>;
+  inviteLink: () => Promise<string>;
+  acceptInvite: (code: string) => Promise<Friend>;
   shareCard: (card: Card, friend: Friend, terms: { limitMinor: number; days: number; includeCvv: boolean }) => Promise<void>;
   stopSharing: (shareId: string) => Promise<void>;
   requestOtp: (card: Card, amountMinor: number, merchant: string) => Promise<Txn>;
@@ -68,6 +95,45 @@ type Ctx = {
 
 const DataContext = createContext<Ctx | null>(null);
 const now = () => new Date().toISOString();
+const displayName = (r: { name: string | null; email: string | null }) => r.name?.trim() || r.email?.split('@')[0] || 'CardVault user';
+const firstName = (name: string) => name.split(' ')[0];
+
+function toFriend(r: FriendRow): Friend {
+  return { id: r.id, name: displayName(r), email: r.email ?? '', photo: r.photo, publicKey: r.publicKey };
+}
+
+/** What in the latest sync is worth telling the user about. */
+function candidatesFrom(txns: Txn[], rows: FriendRow[], me: string, name: (id: string) => string): Candidate[] {
+  const out: Candidate[] = [];
+  for (const r of rows) {
+    if (r.state === 'incoming') out.push({ key: `fr-in:${r.id}`, title: `${displayName(r)} sent you a friend request`, body: 'Accept it to share cards and OTPs.', href: '/friends' });
+    if (r.state === 'friend') out.push({ key: `fr-ok:${r.id}`, title: `You and ${firstName(displayName(r))} are now friends`, body: 'You can share cards with each other.', href: '/friends' });
+  }
+  const t0 = Date.now();
+  for (const t of txns) {
+    const who = firstName(name(t.lenderId === me ? t.borrowerId : t.lenderId));
+    const amount = formatMoney(t.amountMinor, t.currency);
+    if (t.kind === 'card_payment') {
+      if (t.lenderId === me && t.status === 'pending' && !t.otpSharedAt && t0 - Date.parse(t.requestedAt) < OTP_TTL_MS) {
+        out.push({ key: `otp-req:${t.id}`, title: `${who} needs an OTP`, body: `${amount} at ${t.merchant ?? 'a shop'}. Open to share it before it expires.`, href: `/otp/${t.id}` });
+      }
+      if (t.lenderId === me && t.status === 'pending' && t.borrowerResult === 'success' && !t.lenderEvidence) {
+        out.push({ key: `charge:${t.id}`, title: `Did your bank charge ${amount}?`, body: `${who} says the payment at ${t.merchant ?? 'the shop'} went through.`, href: `/otp/${t.id}` });
+      }
+      if (t.status === 'confirmed') {
+        out.push(t.lenderId === me
+          ? { key: `ok:${t.id}`, title: `${who} owes you ${amount}`, body: `Payment at ${t.merchant ?? 'a shop'} recorded in both ledgers.`, href: '/ledger' }
+          : { key: `ok:${t.id}`, title: `You owe ${who} ${amount}`, body: `Payment at ${t.merchant ?? 'a shop'} recorded in both ledgers.`, href: '/ledger' });
+      }
+      if (t.status === 'disputed') out.push({ key: `dispute:${t.id}`, title: `Payment of ${amount} disputed`, body: `You and ${who} disagree about it. It isn’t counted until it’s sorted out.`, href: '/ledger' });
+    } else if (t.createdBy && t.createdBy !== me) {
+      if (t.status === 'pending') out.push({ key: `repay:${t.id}`, title: `${who} recorded a ${amount} repayment`, body: 'Confirm it in your ledger once you see it.', href: '/ledger' });
+    } else if (t.status === 'confirmed') {
+      out.push({ key: `repaid:${t.id}`, title: `${who} confirmed your ${amount} repayment`, body: 'Your ledger is up to date.', href: '/ledger' });
+    }
+  }
+  return out;
+}
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user, status } = useAuth();
@@ -75,11 +141,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const vault = useVault();
   const me = user?.id ?? 'me';
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [former, setFormer] = useState<Friend[]>([]);
+  const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [shares, setShares] = useState<OutgoingShare[]>([]);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [demo, setDemo] = useState(false);
   const [otps, setOtps] = useState<Record<string, string>>({});
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [banner, setBanner] = useState<AppNotification | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  // Keys of things already notified. null until the first sync, which only records what's there.
+  const seen = useRef<Set<string> | null>(null);
+  const lastSync = useRef(0);
   // Re-evaluates time-based states (OTP expiry, share end dates) every few seconds.
   const nowMs = useNow(5000);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -90,11 +164,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const pending = timers.current;
     (async () => {
       setFriends((await getJSON<Friend[]>(FRIENDS)) ?? []);
+      setFormer((await getJSON<Friend[]>(FORMER)) ?? []);
       setShares((await getJSON<OutgoingShare[]>(SHARES)) ?? []);
       const cached = await AsyncStorage.getItem(TXNS);
       setTxns(cached ? JSON.parse(cached) : []);
       setDemo((await AsyncStorage.getItem(DEMO)) === '1');
-    })().catch(() => {});
+      const notes = await AsyncStorage.getItem(NOTES);
+      setNotifications(notes ? JSON.parse(notes) : []);
+      const keys = await AsyncStorage.getItem(SEEN);
+      seen.current = keys ? new Set(JSON.parse(keys)) : null;
+      setLoaded(true);
+    })().catch(() => setLoaded(true));
     return () => pending.forEach(clearTimeout);
   }, [status]);
 
@@ -123,20 +203,79 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setShares(next);
     await setJSON(SHARES, next);
   }, []);
+  const saveNotifications = useCallback((next: (prev: AppNotification[]) => AppNotification[]) => {
+    setNotifications((prev) => {
+      const value = next(prev).slice(0, 60);
+      AsyncStorage.setItem(NOTES, JSON.stringify(value)).catch(() => {});
+      return value;
+    });
+  }, []);
+
+  /** Turns new candidates into notifications: in the list, as a banner, and as a system notification. */
+  const publish = useCallback((cands: Candidate[], { always = false } = {}) => {
+    const first = seen.current === null;
+    const keys = seen.current ?? new Set<string>();
+    const fresh = cands.filter((c) => !keys.has(c.key));
+    fresh.forEach((c) => keys.add(c.key));
+    seen.current = keys;
+    AsyncStorage.setItem(SEEN, JSON.stringify([...keys].slice(-1500))).catch(() => {});
+    // The first sync on a device only records what's already there, unless it just arrived.
+    if (!fresh.length || (first && !always)) return;
+    const at = now();
+    const made = fresh.map((c) => ({ id: c.key, title: c.title, body: c.body, href: c.href, at, read: false }));
+    saveNotifications((prev) => [...made, ...prev.filter((p) => !made.some((m) => m.id === p.id))]);
+    setBanner(made[0]);
+    for (const n of made) systemNotify(n).catch(() => {});
+  }, [saveNotifications]);
 
   const online = serverConfigured && user?.mode === 'google' && !demo;
+  const friend = useCallback((id: string) => friends.find((f) => f.id === id) ?? former.find((f) => f.id === id), [friends, former]);
 
-  // Server sync: transactions plus the sealed-message inbox.
+  // Server sync: friends, transactions and the sealed-message inbox.
   const refresh = useCallback(async () => {
     if (!online) return;
+    lastSync.current = Date.now();
     try {
-      const { transactions } = await api.transactions();
+      const [{ transactions }, { friends: rows }] = await Promise.all([api.transactions(), api.friends()]);
       saveTxns(transactions);
+
+      const accepted = rows.filter((r) => r.state === 'friend').map(toFriend);
+      const ids = new Set(accepted.map((f) => f.id));
+      const gone = friends.filter((f) => !ids.has(f.id) && !f.demo);
+      if (gone.length) {
+        const nextFormer = [...gone, ...former.filter((f) => !gone.some((g) => g.id === f.id))].slice(0, 100);
+        setFormer(nextFormer);
+        await setJSON(FORMER, nextFormer);
+      }
+      await saveFriends(accepted);
+      setRequests(rows.filter((r) => r.state !== 'friend').map((r) => ({
+        id: r.id, name: displayName(r), email: r.email ?? '', photo: r.photo, direction: r.state === 'incoming' ? 'incoming' : 'outgoing', at: r.since,
+      })));
+      // After an unfriend (from either side): their cards leave this device and mine stop being shared.
+      for (const c of vault.cards) {
+        if (c.source === 'shared' && c.sharedBy && !c.demo && !ids.has(c.sharedBy.userId)) await vault.removeCard(c.id);
+      }
+      const orphaned = shares.filter((s) => s.active && !ids.has(s.friendId));
+      if (orphaned.length) {
+        for (const s of orphaned) {
+          if (s.friendPublicKey) await api.send(s.friendId, 'card_unshare', seal(s.friendPublicKey, { shareId: s.id })).catch(() => {});
+        }
+        await saveShares(shares.map((s) => (orphaned.includes(s) ? { ...s, active: false } : s)));
+      }
+
+      const nameOf = (id: string) => accepted.find((f) => f.id === id)?.name ?? friend(id)?.name ?? 'A friend';
+      publish(candidatesFrom(transactions, rows, me, nameOf));
+
       const { messages } = await api.inbox();
-      for (const m of messages) {
+      const arrived: Candidate[] = [];
+      for (const m of messages as MailMessage[]) {
         if (m.kind === 'otp' && m.txnId) {
           const body = await open<{ otp: string }>(m.payload);
-          if (body) setOtps((prev) => ({ ...prev, [m.txnId!]: body.otp }));
+          if (!body) continue;
+          setOtps((prev) => ({ ...prev, [m.txnId!]: body.otp }));
+          const t = transactions.find((x) => x.id === m.txnId);
+          const card = vault.cards.find((c) => c.source === 'shared' && c.cardRef === t?.cardRef);
+          arrived.push({ key: `otp-in:${m.txnId}`, title: `${firstName(nameOf(m.from))} sent the OTP`, body: 'Open CardVault to see it and finish paying.', href: card ? `/pay/${card.id}` : '/' });
         } else if (m.kind === 'card_share') {
           const body = await open<CardSharePayload>(m.payload);
           if (!body) continue;
@@ -147,45 +286,84 @@ export function DataProvider({ children }: { children: ReactNode }) {
             createdAt: m.sentAt,
             sharedBy: { userId: m.from, name: body.fromName, shareId: body.shareId, limitMinor: body.limitMinor, endsAt: body.endsAt },
           });
+          arrived.push({ key: `share:${body.shareId}:${m.id}`, title: `${firstName(body.fromName)} shared ${body.card.nickname} with you`, body: `Up to ${formatMoney(body.limitMinor)} a payment. They approve each one with an OTP.`, href: `/card/shr_${body.shareId}` });
         } else if (m.kind === 'card_unshare') {
           const body = await open<{ shareId: string }>(m.payload);
           if (body) await vault.removeCard(`shr_${body.shareId}`);
         }
       }
+      if (arrived.length) publish(arrived, { always: true });
       setSyncError(null);
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : 'Sync failed');
     }
-  }, [online, saveTxns, vault]);
+  }, [online, me, friends, former, friend, shares, saveTxns, saveFriends, saveShares, vault, publish]);
+
+  // Ask for system notification permission once someone is signed in to the server.
+  useEffect(() => {
+    if (online) enableSystemNotifications().catch(() => {});
+  }, [online]);
+
+  // Keep the latest refresh in a ref so the polling timer doesn't restart on every state change.
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
 
   useEffect(() => {
-    if (!online || locked) return;
-    const first = setTimeout(refresh, 0);
+    if (!online || locked || !loaded) return;
+    const first = setTimeout(() => refreshRef.current(), 0);
     const id = setInterval(() => {
-      if (AppState.currentState === 'active') refresh();
+      const gap = AppState.currentState === 'active' ? POLL_MS : BACKGROUND_POLL_MS;
+      if (Date.now() - lastSync.current >= gap - 500) refreshRef.current();
     }, POLL_MS);
     return () => {
       clearTimeout(first);
       clearInterval(id);
     };
-  }, [online, locked, refresh]);
-
-  const friend = useCallback((id: string) => friends.find((f) => f.id === id), [friends]);
+  }, [online, locked, loaded]);
 
   const publicKeyOf = useCallback(async (id: string) => {
-    const f = friends.find((x) => x.id === id);
+    const f = friend(id);
     if (f?.publicKey) return f.publicKey;
     return (await api.getUser(id)).publicKey;
-  }, [friends]);
+  }, [friend]);
 
-  const addFriend = useCallback(async (email: string, name: string) => {
-    if (!online) throw new Error('Adding friends needs the CardVault server and Google sign-in.');
-    const found = await api.lookupByEmail(email.trim().toLowerCase());
-    if (found.id === me) throw new Error('That’s you.');
-    const f: Friend = { id: found.id, name: name.trim() || email.split('@')[0], email: email.trim(), publicKey: found.publicKey };
-    await saveFriends([...friends.filter((x) => x.id !== f.id), f]);
-    return f;
-  }, [online, me, friends, saveFriends]);
+  const needServer = useCallback(() => {
+    if (!online) throw new Error('Friends connect through the CardVault server. Sign in with Google to add them.');
+  }, [online]);
+
+  const requestFriend = useCallback(async (email: string) => {
+    needServer();
+    const r = await api.requestFriend(email.trim());
+    await refreshRef.current();
+    return r.state;
+  }, [needServer]);
+
+  const acceptFriend = useCallback(async (id: string) => {
+    needServer();
+    await api.acceptFriend(id);
+    await refreshRef.current();
+  }, [needServer]);
+
+  const declineFriend = useCallback(async (id: string) => {
+    needServer();
+    await api.removeFriend(id);
+    setRequests((prev) => prev.filter((r) => r.id !== id));
+  }, [needServer]);
+
+  const inviteLink = useCallback(async () => {
+    needServer();
+    const { code } = await api.createInvite();
+    return `${config.apiUrl}/invite/${code}`;
+  }, [needServer]);
+
+  const acceptInvite = useCallback(async (code: string) => {
+    needServer();
+    const r = await api.acceptInvite(code);
+    await refreshRef.current();
+    return { id: r.friend.id, name: displayName(r.friend), email: r.friend.email ?? '', photo: r.friend.photo, publicKey: '' };
+  }, [needServer]);
 
   const shareCard = useCallback<Ctx['shareCard']>(async (card, f, { limitMinor, days, includeCvv }) => {
     const terms = { limitMinor, includeCvv, endsAt: new Date(Date.now() + days * 86_400_000).toISOString() };
@@ -193,6 +371,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       id: randomId('shr'),
       cardId: card.id,
       friendId: f.id,
+      friendPublicKey: f.publicKey || undefined,
       ...terms,
       createdAt: now(),
       active: true,
@@ -223,10 +402,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const s = shares.find((x) => x.id === shareId);
     if (!s) return;
     if (online) {
-      await api.send(s.friendId, 'card_unshare', seal(await publicKeyOf(s.friendId), { shareId }));
+      await api.send(s.friendId, 'card_unshare', seal(s.friendPublicKey ?? (await publicKeyOf(s.friendId)), { shareId }));
     }
     await saveShares(shares.map((x) => (x.id === shareId ? { ...x, active: false } : x)));
   }, [online, shares, saveShares, publicKeyOf]);
+
+  const removeFriend = useCallback(async (id: string) => {
+    if (!online) {
+      await saveFriends(friends.filter((f) => f.id !== id));
+      return;
+    }
+    // Stop my shares and drop theirs first, while we still know their key.
+    for (const s of shares.filter((x) => x.active && x.friendId === id)) await stopSharing(s.id).catch(() => {});
+    for (const c of vault.cards.filter((x) => x.sharedBy?.userId === id)) await vault.removeCard(c.id);
+    await api.removeFriend(id);
+    await refreshRef.current();
+  }, [online, friends, shares, saveFriends, stopSharing, vault]);
 
   const requestOtp = useCallback<Ctx['requestOtp']>(async (card, amountMinor, merchant) => {
     if (!card.sharedBy) throw new Error('Only cards shared with you need an OTP from their owner.');
@@ -360,9 +551,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await saveShares([]);
     saveTxns([]);
     setOtps({});
+    setRequests([]);
+    setFormer([]);
+    await setJSON(FORMER, []);
+    saveNotifications(() => []);
+    setBanner(null);
     await AsyncStorage.removeItem(DEMO);
     setDemo(false);
-  }, [vault, saveFriends, saveShares, saveTxns]);
+  }, [vault, saveFriends, saveShares, saveTxns, saveNotifications]);
+
+  const dismissBanner = useCallback(() => setBanner(null), []);
+  const markAllRead = useCallback(() => saveNotifications((prev) => prev.map((n) => (n.read ? n : { ...n, read: true }))), [saveNotifications]);
 
   const value = useMemo<Ctx>(() => {
     const live = txns.map((t) => ({ ...t, status: effectiveStatus(t, nowMs) }));
@@ -372,6 +571,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       online,
       syncError,
       friends,
+      requests,
       friend,
       txns: live,
       now: nowMs,
@@ -379,7 +579,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       otpFor: (id) => otps[id],
       net: (friendId) => netWith(live, me, friendId),
       totals: totals(live, me, friends.map((f) => f.id)),
-      addFriend,
+      notifications,
+      unread: notifications.filter((n) => !n.read).length,
+      banner,
+      dismissBanner,
+      markAllRead,
+      requestFriend,
+      acceptFriend,
+      declineFriend,
+      removeFriend,
+      inviteLink,
+      acceptInvite,
       shareCard,
       stopSharing,
       requestOtp,
@@ -393,7 +603,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       loadDemo,
       clearAll,
     };
-  }, [me, demo, online, syncError, friends, friend, txns, shares, otps, nowMs, addFriend, shareCard, stopSharing,
+  }, [me, demo, online, syncError, friends, requests, friend, txns, shares, otps, nowMs, notifications, banner, dismissBanner, markAllRead,
+    requestFriend, acceptFriend, declineFriend, removeFriend, inviteLink, acceptInvite, shareCard, stopSharing,
     requestOtp, shareOtp, declineOtp, reportResult, confirmCharge, settleUp, confirmRepayment, refresh, loadDemo, clearAll]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Avatar, Notice, Panel, Row, StatusBadge, Toggle } from '@/components/bits';
 import { Button } from '@/components/Button';
@@ -6,6 +7,7 @@ import { Screen, Title } from '@/components/layout';
 import { T } from '@/components/Text';
 import { googleConfigured, serverConfigured } from '@/lib/config';
 import { formatMoney } from '@/lib/money';
+import { enableSystemNotifications } from '@/lib/notify';
 import { confirmAction, isWeb } from '@/lib/platform';
 import { useAuth } from '@/state/auth';
 import { useData } from '@/state/data';
@@ -31,6 +33,7 @@ export default function SettingsScreen() {
   const { settings, update, c } = useSettings();
   const { user, signOut } = useAuth();
   const data = useData();
+  const [notifyState, setNotifyState] = useState<'unknown' | 'on' | 'blocked'>('unknown');
 
   const wipe = async () => {
     const ok = await confirmAction(
@@ -97,6 +100,13 @@ export default function SettingsScreen() {
 
       <Group label="Connection">
         <Row title="Google sign-in" right={<StatusBadge status={googleConfigured ? 'settled' : 'expired'} label={googleConfigured ? 'Set up' : 'Not set up'} />} />
+        <Row
+          title="Notifications"
+          subtitle={isWeb ? 'While a CardVault tab is open, even in the background' : 'OTP and friend requests, while CardVault is open or recently used'}
+          chevron={notifyState !== 'on'}
+          onPress={async () => setNotifyState((await enableSystemNotifications()) ? 'on' : 'blocked')}
+          right={<T variant="label" color={notifyState === 'blocked' ? 'owe' : 'inkMuted'}>{notifyState === 'on' ? 'On' : notifyState === 'blocked' ? 'Blocked in settings' : 'Turn on'}</T>}
+        />
         <Row title="CardVault server" subtitle={serverConfigured ? 'Friends, OTP sharing and ledger sync' : 'Not configured in this build'} right={<StatusBadge status={data.online ? 'settled' : 'expired'} label={data.online ? 'Connected' : 'Offline'} />} />
         <Row
           last

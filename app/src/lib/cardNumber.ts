@@ -38,6 +38,17 @@ export function detectNetwork(number: string): Network {
   return 'other';
 }
 
+/** How many digits a card number on this network has. */
+export function maxDigits(network: Network): number {
+  return network === 'amex' ? 15 : network === 'diners' ? 14 : network === 'other' ? 19 : 16;
+}
+
+/** Keeps typed input to digits, capped at the network's length. */
+export function cardNumberInput(text: string): string {
+  const d = digitsOnly(text);
+  return d.slice(0, maxDigits(detectNetwork(d)));
+}
+
 /** "4315810022904821" → "4315 8100 2290 4821" (Amex: 4-6-5). */
 export function formatCardNumber(number: string): string {
   const d = digitsOnly(number).slice(0, 19);
@@ -49,6 +60,17 @@ export function formatCardNumber(number: string): string {
 
 export function maskedNumber(last4: string): string {
   return `•••• •••• •••• ${last4}`;
+}
+
+/**
+ * Formats MM/YY as it's typed: "1" → "1", "12" → "12/", "4" → "04/", "1229" → "12/29".
+ * Backspacing over the slash removes the digit before it.
+ */
+export function expiryInput(next: string, prev: string): string {
+  let d = digitsOnly(next).slice(0, 4);
+  if (prev.endsWith('/') && next === prev.slice(0, -1)) d = d.slice(0, -1);
+  if (d.length === 1 && Number(d) > 1) d = `0${d}`;
+  return d.length >= 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
 }
 
 /** Accepts "0829", "08/29", "8/29"; returns "08/29" or null. */

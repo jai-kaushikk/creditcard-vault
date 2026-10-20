@@ -54,12 +54,14 @@ export function LedgerList({ children }: { children: React.ReactNode }) {
 
 export function BalanceCard({
   name,
+  photo,
   net,
   onPress,
   actionLabel,
   onAction,
 }: {
   name: string;
+  photo?: string | null;
   net: number;
   onPress?: () => void;
   actionLabel?: string;
@@ -70,7 +72,7 @@ export function BalanceCard({
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
       <View style={{ backgroundColor: c.surfaceRaised, borderRadius: radius.md, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Avatar name={name} size={44} />
+        <Avatar name={name} photo={photo} size={44} />
         <View style={{ flex: 1 }}>
           <T variant="body" style={{ fontFamily: fonts.semibold }}>{name}</T>
           {net === 0 ? (

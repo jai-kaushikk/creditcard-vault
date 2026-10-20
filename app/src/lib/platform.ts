@@ -1,5 +1,6 @@
+import * as Clipboard from 'expo-clipboard';
 import { usePreventScreenCapture } from 'expo-screen-capture';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, Share } from 'react-native';
 
 export const isWeb = Platform.OS === 'web';
 
@@ -20,4 +21,22 @@ export function confirmAction(title: string, message: string, confirmLabel: stri
 export function notify(title: string, message: string): void {
   if (isWeb) window.alert(`${title}\n\n${message}`);
   else Alert.alert(title, message);
+}
+
+/** Opens the share sheet (WhatsApp, Messages…). Browsers without one copy the text instead. */
+export async function shareText(text: string, url: string): Promise<'shared' | 'copied'> {
+  if (isWeb) {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ text, url });
+        return 'shared';
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return 'shared';
+      }
+    }
+    await Clipboard.setStringAsync(url);
+    return 'copied';
+  }
+  await Share.share({ message: `${text} ${url}` });
+  return 'shared';
 }

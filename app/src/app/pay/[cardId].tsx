@@ -31,6 +31,7 @@ export default function PayWithFriendsCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [otpCopied, setOtpCopied] = useState(false);
 
   if (!card?.sharedBy) {
     return (
@@ -133,6 +134,15 @@ export default function PayWithFriendsCard() {
           </T>
           <T variant="caption" color="inkMuted">Shown once</T>
         </View>
+        <Button
+          size="sm"
+          icon={otpCopied ? 'check' : 'copy'}
+          label={otpCopied ? 'Copied: paste it on the bank page' : 'Copy OTP'}
+          onPress={async () => {
+            await Clipboard.setStringAsync(otp);
+            setOtpCopied(true);
+          }}
+        />
         <T variant="body" style={{ fontFamily: 'SchibstedGrotesk_600SemiBold' }}>Did the payment go through?</T>
         <Button variant="primary" block label="Payment went through" busy={busy} onPress={() => run(() => data.reportResult(txn.id, 'success'))} />
         <Button block label="It failed" disabled={busy} onPress={() => run(() => data.reportResult(txn.id, 'failed'))} />

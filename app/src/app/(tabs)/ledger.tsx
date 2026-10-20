@@ -7,6 +7,7 @@ import { Screen, Title } from '@/components/layout';
 import { LedgerList, LedgerRow } from '@/components/rows';
 import { T } from '@/components/Text';
 import { counterparty } from '@/lib/ledger';
+import { confirmAction } from '@/lib/platform';
 import { useData } from '@/state/data';
 import { fonts } from '@/theme/tokens';
 
@@ -44,8 +45,8 @@ export default function LedgerScreen() {
       {friend ? (
         <Panel style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            <Avatar name={friend.name} size={44} />
-            <View>
+            <Avatar name={friend.name} photo={friend.photo} size={44} />
+            <View style={{ flex: 1 }}>
               <T variant="body" style={{ fontFamily: fonts.semibold }}>{friend.name}</T>
               <T variant="caption" color="inkMuted">{friend.email}</T>
             </View>
@@ -58,6 +59,24 @@ export default function LedgerScreen() {
           </View>
           {net !== 0 ? (
             <Button variant="primary" size="sm" block label={net > 0 ? 'Mark as paid' : 'Settle up'} onPress={() => router.push(`/settle/${friend.id}`)} />
+          ) : null}
+          {data.friends.some((f) => f.id === friend.id) ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              label="Remove friend"
+              onPress={async () => {
+                const ok = await confirmAction(
+                  `Remove ${friend.name}?`,
+                  'Cards you share with each other stop being shared, and neither of you can ask the other for OTPs. Your ledger history stays.',
+                  'Remove',
+                  true,
+                );
+                if (!ok) return;
+                await data.removeFriend(friend.id);
+                setWho('all');
+              }}
+            />
           ) : null}
         </Panel>
       ) : (
