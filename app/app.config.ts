@@ -48,6 +48,7 @@ const config: ExpoConfig = {
       'android.permission.USE_FINGERPRINT',
       'android.permission.POST_NOTIFICATIONS',
       'android.permission.CAMERA',
+      'android.permission.NFC',
     ],
     // The card scanner takes photos only; it never needs the microphone.
     blockedPermissions: ['android.permission.RECORD_AUDIO'],

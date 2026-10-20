@@ -76,7 +76,7 @@ The public APK stays signed with the standard React Native debug key, so testers
 
 ## How it works
 
-1. **Add a card.** The number, expiry and optional CVV are stored in the Android Keystore / iOS Keychain-backed secure store on that phone only. On Android, **Scan card with camera** reads the number and expiry on the phone (Google ML Kit, offline); each photo is deleted as soon as it's read. In Safari on iPhone, the number field offers Safari's own *Scan Credit Card*.
+1. **Add a card.** The number, expiry and optional CVV are stored in the Android Keystore / iOS Keychain-backed secure store on that phone only. On Android, **Scan card** reads the number and expiry with the camera, on the phone (Google ML Kit, offline; each photo is deleted as soon as it's read), and **Tap card** reads them from a contactless card's chip over NFC, the way a terminal starts a payment, without charging anything or reading the card's history. The chip doesn't hold the CVV, so that's typed in. In Safari on iPhone, the number field offers Safari's own *Scan Credit Card*.
 2. **Share it.** The card is encrypted on your phone to your friend's public key (X25519 + XSalsa20-Poly1305, `tweetnacl`) and relayed once by the server, which can't read it.
 3. **Friend pays.** They copy the details at checkout and tap *Ask for the OTP* with the amount and merchant. You get the request, type or paste the OTP your bank texted you, and it goes to them sealed, shown once.
 4. **Recorded only on success.** They report the result and you confirm the charge. Then the transaction is *confirmed*: +lent for you, −owed for them. If you disagree, it becomes *disputed*. If nobody shares an OTP within 3 minutes, it *expires* and nothing is recorded.

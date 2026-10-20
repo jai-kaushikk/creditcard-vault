@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Notice } from '@/components/bits';
 import { Button } from '@/components/Button';
 import { CardScanner, canScanCards } from '@/components/CardScanner';
+import { CardTapSheet, canTapCards } from '@/components/CardTapSheet';
 import { CreditCardView } from '@/components/CreditCardView';
 import { Field, Screen, Title, TopBar } from '@/components/layout';
 import { T } from '@/components/Text';
@@ -27,8 +28,8 @@ export default function AddCard() {
   const [face, setFace] = useState<CardFace>('slate');
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [scanned, setScanned] = useState(false);
+  const [reader, setReader] = useState<'camera' | 'nfc' | null>(null);
+  const [filledBy, setFilledBy] = useState<'camera' | 'nfc' | null>(null);
 
   const digits = digitsOnly(number);
   const network = detectNetwork(digits);
@@ -45,6 +46,16 @@ export default function AddCard() {
     cvv: cvv && !/^\d{3,4}$/.test(cvv) ? 'CVV is 3 or 4 digits.' : null,
   };
   const valid = !errors.number && !errors.expiry && !errors.cvv;
+
+  /** Fills the form from the camera or the chip; anything already typed in the name is kept. */
+  const fill = (r: { number: string | null; expiry: string | null; holder: string | null }, by: 'camera' | 'nfc') => {
+    setReader(null);
+    if (r.number) setNumber(cardNumberInput(r.number));
+    if (r.expiry) setExpiry(r.expiry);
+    if (r.holder && !holder) setHolder(r.holder.replace(/\b(\w)(\w*)/g, (_m, a: string, b: string) => a + b.toLowerCase()));
+    setFilledBy(by);
+    setTouched(true);
+  };
 
   const save = async () => {
     setTouched(true);
@@ -71,10 +82,20 @@ export default function AddCard() {
       <Screen footer={<Button variant="primary" block label="Save to vault" busy={busy} onPress={save} />}>
         <TopBar back="Cancel" />
         <Title>Add a card</Title>
-        {canScanCards ? (
-          <Button block icon="camera" label="Scan card with camera" onPress={() => setScanning(true)} />
+        {canScanCards || canTapCards ? (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {canScanCards ? <Button style={{ flex: 1 }} block icon="camera" label="Scan card" onPress={() => setReader('camera')} /> : null}
+            {canTapCards ? <Button style={{ flex: 1 }} block icon="nfc" label="Tap card" onPress={() => setReader('nfc')} /> : null}
+          </View>
         ) : null}
-        {scanned ? <Notice tone="good" icon="check" title="Filled in from the camera" body="Check the number and expiry against your card before you save." /> : null}
+        {filledBy ? (
+          <Notice
+            tone="good"
+            icon="check"
+            title={filledBy === 'nfc' ? 'Read from the card’s chip' : 'Filled in from the camera'}
+            body={filledBy === 'nfc' ? 'Add the CVV and name yourself if you want them saved; the chip doesn’t share them.' : 'Check the number and expiry against your card before you save.'}
+          />
+        ) : null}
         <View style={{ alignItems: 'center' }}>
           <CreditCardView
             nickname={nickname || 'New card'}
@@ -128,19 +149,8 @@ export default function AddCard() {
             : 'Saved only on this phone, encrypted in the system keystore. CardVault’s servers never see it.'}
         </T>
       </Screen>
-      {scanning ? (
-        <CardScanner
-          onClose={() => setScanning(false)}
-          onResult={(r) => {
-            setScanning(false);
-            if (r.number) setNumber(cardNumberInput(r.number));
-            if (r.expiry) setExpiry(r.expiry);
-            if (r.holder && !holder) setHolder(r.holder.replace(/\b(\w)(\w*)/g, (_m, a: string, b: string) => a + b.toLowerCase()));
-            setScanned(true);
-            setTouched(true);
-          }}
-        />
-      ) : null}
+      {reader === 'camera' ? <CardScanner onClose={() => setReader(null)} onResult={(r) => fill(r, 'camera')} /> : null}
+      {reader === 'nfc' ? <CardTapSheet onClose={() => setReader(null)} onResult={(r) => fill(r, 'nfc')} /> : null}
     </View>
   );
 }
