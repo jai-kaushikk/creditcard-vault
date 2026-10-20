@@ -67,9 +67,9 @@ test('full flow: share card, request OTP, relay it, confirm, then repay', async 
   const rahul = await signIn('g-rahul', 'rahul@example.com');
 
   // Friend lookup by email is case-insensitive and returns only id + public key.
-  const found = await rahul.call('GET', '/v1/users/lookup?email=aarav@example.com');
+  const found = await rahul.call('POST', '/v1/users/lookup', { email: 'aarav@example.com' });
   assert.deepEqual(found.json(), { id: aarav.userId, publicKey: KEY });
-  assert.equal((await rahul.call('GET', '/v1/users/lookup?email=nobody@example.com')).statusCode, 404);
+  assert.equal((await rahul.call('POST', '/v1/users/lookup', { email: 'nobody@example.com' })).statusCode, 404);
 
   // Card share goes through the mailbox once and is gone after delivery.
   assert.equal((await aarav.call('POST', '/v1/mailbox', { to: rahul.userId, kind: 'card_share', payload: sealed })).statusCode, 201);

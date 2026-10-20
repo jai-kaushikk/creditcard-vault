@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · CardVault</title>
+<link rel="icon" href="mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a href="./" aria-label="CardVault home"><img class="logo-light" src="logo-light.svg" alt="CardVault"><img class="logo-dark" src="logo-dark.svg" alt="CardVault"></a>
+    <nav aria-label="Site"><a href="./">Home</a><a href="privacy.html" aria-current="page">Privacy</a><a href="terms.html">Terms</a></nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+    <h1>Privacy policy</h1>
+    <p class="meta">Effective 20 October 2026</p>
+    <p>CardVault is built so that we hold as little about you as possible. Your card details never reach our servers in a form we can read. This policy explains what we do collect, why, and your choices.</p>
+
+    <h2>What stays on your phone</h2>
+    <p>Card numbers, expiry dates, CVVs, card nicknames, your friends’ names, and your balances are stored only on your device, in the operating system’s secure keystore (Android Keystore or iOS Keychain). We never receive them.</p>
+
+    <h2>What our server stores</h2>
+    <div class="table-wrap">
+    <table>
+      <tr><th>Data</th><th>Why</th></tr>
+      <tr><td>An account ID derived from a one-way hash of your Google account ID</td><td>To sign you in and tell your transactions apart</td></tr>
+      <tr><td>A one-way hash of your email address</td><td>So friends who know your email can find you; we cannot read the address back from it</td></tr>
+      <tr><td>Your device’s public encryption key</td><td>So friends can encrypt card shares and OTPs that only your phone can open</td></tr>
+      <tr><td>Transactions: amount, currency, the merchant name you type, status, timestamps, the account IDs of both people, and a random card reference</td><td>To keep a shared, accurate ledger between you and your friends</td></tr>
+      <tr><td>An audit history of each transaction’s status changes</td><td>To resolve disputes and keep the ledger honest</td></tr>
+    </table>
+    </div>
+    <p>The card reference is a random value created on your phone. It is not your card number or any part of it.</p>
+
+    <h2>Server logs</h2>
+    <p>Like any web service, our server writes request logs (time, the address the request came from, which endpoint was called, and the result) to Google Cloud Logging, which keeps them for up to 30 days. They are used only to keep the service running and secure, and never contain card details, OTPs, or your email address.</p>
+
+    <h2>Card shares and OTPs</h2>
+    <p>When you share a card or an OTP with a friend, it is encrypted on your phone so that only their phone can decrypt it. Our server holds the encrypted message until their phone collects it, then deletes it. Undelivered messages are deleted automatically, OTPs after 5 minutes and card shares after 24 hours. We cannot read these messages.</p>
+
+    <h2>Google sign-in</h2>
+    <p>CardVault uses Google Sign-In and asks only for your basic profile and email. Google gives us a signed token that we check, and we keep only the hashes described above. Your name and photo stay on your phone. We do not access any other Google data.</p>
+
+    <h2>What we don’t do</h2>
+    <p>We don’t sell or rent your data, show ads, use third-party analytics or trackers, or share your data with anyone, except where the law requires it.</p>
+
+    <h2>Where data is kept</h2>
+    <p>Our server and database run on Google Cloud in Mumbai, India (asia-south1). Connections use HTTPS.</p>
+
+    <h2>How long we keep it</h2>
+    <p>We keep your account and transactions while your account exists, so both people’s ledgers stay complete. Relay messages are deleted as described above.</p>
+
+    <h2>Your choices</h2>
+    <p>You can delete everything on your phone from Settings → “Delete everything on this phone”. To delete your account on our server, email us from the address you sign in with. We’ll remove your account and anonymise your side of transactions, so your friends’ ledgers stay correct without identifying you.</p>
+
+    <h2>Children</h2>
+    <p>CardVault is not intended for anyone under 18.</p>
+
+    <h2>Changes</h2>
+    <p>If we change this policy, we’ll update the date above and, for significant changes, tell you in the app.</p>
+
+    <h2>Contact</h2>
+    <p>Questions or requests: <a href="mailto:jaijaijjjj1111@gmail.com">jaijaijjjj1111@gmail.com</a></p>
+  </div>
+</main>
+<footer>
+  <div class="wrap"><span>© 2026 CardVault</span><a href="./">Home</a><a href="terms.html">Terms of service</a></div>
+</footer>
+</body>
+</html>

@@ -110,10 +110,11 @@ export function buildApp(deps: Deps) {
   app.register(async (priv) => {
     priv.addHook('preHandler', auth);
 
-    priv.get<{ Querystring: { email: string } }>('/v1/users/lookup', {
-      schema: { querystring: { type: 'object', required: ['email'], properties: { email: { type: 'string', maxLength: 320 } } } },
+    // POST so the email travels in the body, never in a URL that request logs record.
+    priv.post<{ Body: { email: string } }>('/v1/users/lookup', {
+      schema: { body: { type: 'object', required: ['email'], properties: { email: { type: 'string', maxLength: 320 } } } },
     }, async (req, reply) => {
-      const a = await store.accountByEmailHash(emailHash(req.query.email, secret));
+      const a = await store.accountByEmailHash(emailHash(req.body.email, secret));
       if (!a || a.status !== 'active') return reply.code(404).send({ error: 'Not found' });
       return { id: a.id, publicKey: a.publicKey };
     });

@@ -60,7 +60,7 @@ export const api = {
     await setJSON(SESSION_KEY, s);
     return s;
   },
-  lookupByEmail: (email: string) => call<PublicUser>('GET', `/v1/users/lookup?email=${encodeURIComponent(email)}`),
+  lookupByEmail: (email: string) => call<PublicUser>('POST', '/v1/users/lookup', { email }),
   getUser: (id: string) => call<PublicUser>('GET', `/v1/users/${encodeURIComponent(id)}`),
   transactions: () => call<{ transactions: Txn[] }>('GET', '/v1/transactions'),
   requestOtp: (body: { lenderId: string; amountMinor: number; currency: string; merchant: string; cardRef: string; idempotencyKey: string }) =>
