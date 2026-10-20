@@ -43,11 +43,11 @@ design-system/  CardVault design system: tokens, components, product and archite
 ### 1. Google sign-in (Google Cloud Console)
 
 1. Create a project at [console.cloud.google.com](https://console.cloud.google.com) and set up the **OAuth consent screen** (External; add yourself and friends as test users while in testing).
-2. **Credentials → Create credentials → OAuth client ID → Web application.** Copy its client ID (`….apps.googleusercontent.com`).
+2. **Clients → Create client → Web application.** Add the web app's address under **Authorized JavaScript origins**. Copy its client ID (`….apps.googleusercontent.com`). Both the Android app and the web app use this one.
 3. **Create credentials → OAuth client ID → Android** with
    - package name `app.cardvault`
-   - SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` (the key the CI builds are signed with until you add your own; see step 4).
-4. In this repo: **Settings → Secrets and variables → Actions → Variables → New repository variable** `GOOGLE_WEB_CLIENT_ID` = the web client ID from step 2.
+   - SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` (the key the CI builds are signed with until you add your own; see section 3).
+4. Set `GOOGLE_WEB_CLIENT_ID` at the top of `.github/workflows/android.yml` to the web client ID from step 2.
 5. Re-run the workflow (**Actions → Test and build APK → Run workflow**). The new APK shows "Continue with Google".
 
 ### 2. The server (needed for friends, sharing and OTPs between phones)

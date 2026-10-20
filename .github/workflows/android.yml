@@ -22,6 +22,8 @@ env:
   GCP_SERVICE_ACCOUNT: cardvault-deployer@project-1ca83d7c-09d0-46ec-800.iam.gserviceaccount.com
   GCP_RUNTIME_SERVICE_ACCOUNT: cardvault-runtime@project-1ca83d7c-09d0-46ec-800.iam.gserviceaccount.com
   CLOUDSQL_CONNECTION: project-1ca83d7c-09d0-46ec-800:asia-south1:cardvault-db
+  # The Web-type OAuth client: the audience of every Google ID token, on Android and the web.
+  GOOGLE_WEB_CLIENT_ID: 420358690991-ffm5ou3qu211d3jq0i1pslmog6gmdajt.apps.googleusercontent.com
 
 jobs:
   app-checks:
@@ -92,7 +94,7 @@ jobs:
         working-directory: app
         env:
           # No API URL: the web app calls the server it's served from.
-          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID || '420358690991-6d927rva07c59bttov8ciutl3i3hgdg4.apps.googleusercontent.com' }}
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ env.GOOGLE_WEB_CLIENT_ID }}
         run: |
           npm ci
           npx expo export --platform web
@@ -118,7 +120,7 @@ jobs:
             --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT" \
             --add-cloudsql-instances "$CLOUDSQL_CONNECTION" \
             --set-secrets "DATABASE_URL=cardvault-database-url:latest,SESSION_SECRET=cardvault-session-secret:latest" \
-            --set-env-vars "GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID || '420358690991-6d927rva07c59bttov8ciutl3i3hgdg4.apps.googleusercontent.com' }}" \
+            --set-env-vars "GOOGLE_WEB_CLIENT_ID=${{ env.GOOGLE_WEB_CLIENT_ID }}" \
             --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 --concurrency 80 \
             --no-invoker-iam-check --quiet
           URL=$(gcloud run services describe cardvault-api --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.url)')
@@ -145,7 +147,7 @@ jobs:
       CI: 1
       # Repository variables (Settings → Secrets and variables → Actions → Variables).
       # The Google web client ID is public (it ships in the APK); a repository variable overrides it.
-      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID || '420358690991-6d927rva07c59bttov8ciutl3i3hgdg4.apps.googleusercontent.com' }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ env.GOOGLE_WEB_CLIENT_ID }}
       EXPO_PUBLIC_API_URL: ${{ needs.deploy-server.outputs.url || vars.CARDVAULT_API_URL }}
       ANDROID_VERSION_CODE: ${{ github.run_number }}
     steps:
