@@ -16,7 +16,7 @@
 
 ## Sign-in
 
-Google Sign-In on the phone; the server verifies the Google ID token against its web client ID and issues its own session token. Friends find each other by the email they use with Google, or by an invite link that opens the app (Android App Links via `/.well-known/assetlinks.json`) or, without it, offers the APK or the web version. The implemented schema and API live in `server/` (`schema.sql`, `src/app.ts`).
+Google Sign-In on the phone; the server verifies the Google ID token against its web client ID and issues its own session token. Friends find each other by the email they use with Google, or by an invite link that opens the app (Android App Links via `/.well-known/assetlinks.json`) or, without it, offers the APK or the web version. People already on CardVault can also be found by name or email prefix (`POST /v1/users/search`, rate-limited, strangers' emails masked). The implemented schema and API live in `server/` (Go: `schema.sql`, `internal/api`).
 
 ## Clients
 

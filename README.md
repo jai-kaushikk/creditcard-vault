@@ -33,7 +33,7 @@ What works depends on two settings baked into the build (see [Setup](#setup)):
 
 ```
 app/            Expo (React Native) app for Android, iOS and the web
-server/         API: accounts, friendships and transactions; relays sealed card shares and OTPs. Also serves the web app
+server/         Go API: accounts, friendships and transactions; relays sealed card shares and OTPs. Also serves the web app
 design-system/  CardVault design system: tokens, components, product and architecture specs
 .github/        CI: tests, then the server + web deploy and the APK build and release
 ```
@@ -64,7 +64,7 @@ design-system/  CardVault design system: tokens, components, product and archite
 
 Then add the repository variable `CARDVAULT_API_URL` = your server's `https://…` URL and re-run the workflow.
 
-Local run: `cd server && npm ci && STORE=memory GOOGLE_WEB_CLIENT_ID=… SESSION_SECRET=… npm run dev`.
+Local run: `cd server && STORE=memory GOOGLE_WEB_CLIENT_ID=… SESSION_SECRET=… WEB_DIR=../app/dist go run ./cmd/server`.
 
 ### 3. Your own signing key (before the Play Store)
 
@@ -78,7 +78,7 @@ CI signs with the standard React Native debug key so Google sign-in has a stable
 4. **Recorded only on success.** They report the result and you confirm the charge. Then the transaction is *confirmed*: +lent for you, −owed for them. If you disagree, it becomes *disputed*. If nobody shares an OTP within 3 minutes, it *expires* and nothing is recorded.
 5. **Settle up** by recording a repayment (UPI, cash…). The other person confirms it.
 
-**Friends** connect both ways: send a friend request to someone's Google email and they accept it, or share your invite link (`…/invite/<code>`, valid 14 days). On Android with the app installed the link opens the app; otherwise it offers the APK download or the web version. Cards and OTP requests only go between accepted friends, and the server enforces that.
+**Friends** connect both ways, and live on the server so the app and the web version see the same list. Find someone already on CardVault by typing their name or email (suggestions appear as you type; strangers' emails are partly hidden), send a request and they accept it, or share your invite link (`…/invite/<code>`, valid 14 days). On Android with the app installed the link opens the app; otherwise it offers the APK download or the web version. Cards and OTP requests only go between accepted friends, and the server enforces that.
 
 **Notifications:** OTP requests, OTPs arriving, friend requests and recorded payments show as a banner in the app, in the bell list, and as system notifications while the app is open or recently backgrounded.
 
@@ -91,7 +91,7 @@ cd app && npm ci
 npm run typecheck && npx expo lint && npm test
 npx expo prebuild --platform android   # generates android/ (git-ignored)
 
-cd server && npm ci && npm run typecheck && npm test   # TEST_DATABASE_URL=… to run against Postgres
+cd server && go vet ./... && go test ./...   # TEST_DATABASE_URL=… (and -p 1) to run against Postgres
 ```
 
 ## Known limits in this version

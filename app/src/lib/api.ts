@@ -54,6 +54,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export type Profile = { id: string; email: string | null; name: string | null; photo: string | null };
 export type FriendRow = Profile & { publicKey: string; state: 'friend' | 'incoming' | 'outgoing'; since: string };
 export type InvitePeek = { name: string; photo: string | null; expiresAt: string };
+/** Someone on CardVault, from search. Strangers' emails come back masked ("ra•••@gmail.com"). */
+export type UserHit = { id: string; name: string | null; email: string | null; photo: string | null; state: FriendRow['state'] | 'none' };
 export type MailMessage = {
   id: string;
   from: string;
@@ -72,7 +74,9 @@ export const api = {
   },
   me: () => call<Profile>('GET', '/v1/me'),
   friends: () => call<{ friends: FriendRow[] }>('GET', '/v1/friends'),
-  requestFriend: (email: string) => call<{ state: FriendRow['state']; friend: Profile }>('POST', '/v1/friends/requests', { email }),
+  /** By email, or by account id from search. */
+  requestFriend: (to: { email: string } | { id: string }) => call<{ state: FriendRow['state']; friend: Profile }>('POST', '/v1/friends/requests', to),
+  searchUsers: (q: string) => call<{ users: UserHit[] }>('POST', '/v1/users/search', { q }),
   acceptFriend: (id: string) => call<{ state: 'friend' }>('POST', `/v1/friends/${encodeURIComponent(id)}/accept`, {}),
   /** Declines, cancels or unfriends. */
   removeFriend: (id: string) => call<{ ok: true }>('DELETE', `/v1/friends/${encodeURIComponent(id)}`),

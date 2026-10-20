@@ -46,7 +46,7 @@ jobs:
       - run: npm test
 
   server-checks:
-    name: Server · typecheck, tests on Postgres
+    name: Server · Go vet, tests on Postgres
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -63,14 +63,14 @@ jobs:
         working-directory: server
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-go@v5
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./... && go vet -tags e2e ./...
+      - run: go test -count=1 -p 1 ./...
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/cardvault_test
 
@@ -120,7 +120,7 @@ jobs:
             --add-cloudsql-instances "$CLOUDSQL_CONNECTION" \
             --set-secrets "DATABASE_URL=cardvault-database-url:latest,SESSION_SECRET=cardvault-session-secret:latest" \
             --set-env-vars "GOOGLE_WEB_CLIENT_ID=$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" \
-            --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 --concurrency 80 \
+            --cpu 1 --memory 256Mi --min-instances 0 --max-instances 2 --concurrency 80 \
             --no-invoker-iam-check --quiet
           URL=$(gcloud run services describe cardvault-api --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.url)')
           echo "url=$URL" >> "$GITHUB_OUTPUT"

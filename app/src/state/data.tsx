@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
-import { api, type FriendRow, type MailMessage } from '@/lib/api';
+import { api, type FriendRow, type MailMessage, type UserHit } from '@/lib/api';
 import { config, serverConfigured } from '@/lib/config';
 import { open, randomId, seal } from '@/lib/crypto';
 import { effectiveStatus, netWith, OTP_TTL_MS, totals, type Txn } from '@/lib/ledger';
@@ -72,7 +72,9 @@ type Ctx = {
   banner: AppNotification | null;
   dismissBanner: () => void;
   markAllRead: () => void;
-  requestFriend: (email: string) => Promise<'friend' | 'outgoing' | 'incoming'>;
+  requestFriend: (to: { email: string } | { id: string }) => Promise<'friend' | 'outgoing' | 'incoming'>;
+  /** People on CardVault whose name or email starts with what's typed. */
+  searchPeople: (q: string) => Promise<UserHit[]>;
   acceptFriend: (id: string) => Promise<void>;
   /** Declines a request or cancels one you sent. */
   declineFriend: (id: string) => Promise<void>;
@@ -333,12 +335,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!online) throw new Error('Friends connect through the CardVault server. Sign in with Google to add them.');
   }, [online]);
 
-  const requestFriend = useCallback(async (email: string) => {
+  const requestFriend = useCallback(async (to: { email: string } | { id: string }) => {
     needServer();
-    const r = await api.requestFriend(email.trim());
+    const r = await api.requestFriend('email' in to ? { email: to.email.trim() } : to);
     await refreshRef.current();
     return r.state;
   }, [needServer]);
+
+  const searchPeople = useCallback(async (q: string) => {
+    if (!online || q.trim().length < 2) return [];
+    return (await api.searchUsers(q.trim())).users;
+  }, [online]);
 
   const acceptFriend = useCallback(async (id: string) => {
     needServer();
@@ -585,6 +592,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       dismissBanner,
       markAllRead,
       requestFriend,
+      searchPeople,
       acceptFriend,
       declineFriend,
       removeFriend,
@@ -604,7 +612,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       clearAll,
     };
   }, [me, demo, online, syncError, friends, requests, friend, txns, shares, otps, nowMs, notifications, banner, dismissBanner, markAllRead,
-    requestFriend, acceptFriend, declineFriend, removeFriend, inviteLink, acceptInvite, shareCard, stopSharing,
+    requestFriend, searchPeople, acceptFriend, declineFriend, removeFriend, inviteLink, acceptInvite, shareCard, stopSharing,
     requestOtp, shareOtp, declineOtp, reportResult, confirmCharge, settleUp, confirmRepayment, refresh, loadDemo, clearAll]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -1,11 +1,17 @@
-FROM node:22-alpine
+# A static Go binary on a minimal base: small image, millisecond cold starts.
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY schema.go schema.sql ./
+COPY cmd ./cmd
+COPY internal ./internal
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+
+# distroless/static has CA certificates (for Google's sign-in keys) and runs as non-root.
+FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /srv
-ENV NODE_ENV=production
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY schema.sql ./
-COPY src ./src
-COPY web ./web
-USER node
+COPY --from=build /out/server /srv/server
+COPY web /srv/web
 EXPOSE 8080
-CMD ["node", "--experimental-strip-types", "--disable-warning=ExperimentalWarning", "src/index.ts"]
+ENTRYPOINT ["/srv/server"]
