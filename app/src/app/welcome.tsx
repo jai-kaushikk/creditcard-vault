@@ -4,6 +4,7 @@ import { Linking, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Amount, Avatar, Notice } from '@/components/bits';
 import { Button } from '@/components/Button';
+import { GoogleButton } from '@/components/GoogleButton';
 import { CreditCardView } from '@/components/CreditCardView';
 import { Glass } from '@/components/Glass';
 import { T } from '@/components/Text';
@@ -14,23 +15,10 @@ import { useTheme } from '@/state/settings';
 export default function Welcome() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { status, signInWithGoogle, continueOffline } = useAuth();
-  const [busy, setBusy] = useState(false);
+  const { status, continueOffline } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
   if (status === 'signedIn') return <Redirect href="/" />;
-
-  const google = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await signInWithGoogle();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Sign-in failed. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.surface, paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24, paddingHorizontal: 24 }}>
@@ -58,12 +46,12 @@ export default function Welcome() {
       <View style={{ flex: 1 }} />
       <View style={{ gap: 8 }}>
         {error ? <Notice tone="bad" icon="alert" title="Couldn’t sign in" body={error} /> : null}
-        <Button variant="primary" block icon="google" label="Continue with Google" busy={busy} onPress={google} />
+        <GoogleButton onError={setError} />
         {!googleConfigured ? (
-          <Button variant="quiet" block label="Try it offline on this phone" onPress={continueOffline} />
+          <Button variant="quiet" block label="Try it offline on this device" onPress={continueOffline} />
         ) : null}
         <T variant="caption" color="inkMuted" style={{ textAlign: 'center', marginTop: 8 }}>
-          Google tells us only your name and email. Card details never leave this phone unencrypted.{' '}
+          Google tells us only your name and email. Card details never leave this device unencrypted.{' '}
           <T variant="caption" color="vault" onPress={() => Linking.openURL('https://github.com/jai-kaushikk/creditcard-vault#privacy')}>Privacy</T>
         </T>
       </View>

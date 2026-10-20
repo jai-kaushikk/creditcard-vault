@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Button } from '@/components/Button';
@@ -10,11 +9,12 @@ import { detectNetwork, digitsOnly, formatCardNumber, isExpired, luhnValid, norm
 import { useTheme } from '@/state/settings';
 import { useVault } from '@/state/vault';
 import { cardFaces, type CardFace } from '@/theme/tokens';
+import { isWeb, usePreventCapture } from '@/lib/platform';
 
 const FACES: CardFace[] = ['onyx', 'jade', 'brass', 'slate'];
 
 export default function AddCard() {
-  usePreventScreenCapture('add-card');
+  usePreventCapture('add-card');
   const { c } = useTheme();
   const vault = useVault();
   const [number, setNumber] = useState('');
@@ -108,7 +108,9 @@ export default function AddCard() {
         </View>
       </View>
       <T variant="label" color="inkMuted" style={{ fontFamily: 'SchibstedGrotesk_400Regular' }}>
-        Saved only on this phone, encrypted in the system keystore. CardVault’s servers never see it.
+        {isWeb
+          ? 'Saved only in this browser, encrypted with a key the browser won’t export. CardVault’s servers never see it.'
+          : 'Saved only on this phone, encrypted in the system keystore. CardVault’s servers never see it.'}
       </T>
     </Screen>
   );

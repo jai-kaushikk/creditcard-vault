@@ -4,6 +4,7 @@ import { accountIdFor, emailHash, issueSession, readSession, type VerifyGoogle }
 import { Mailbox, type Relay, type Sealed } from './mailbox.ts';
 import * as rules from './rules.ts';
 import type { Store } from './store.ts';
+import { registerWeb } from './web.ts';
 
 export type Deps = {
   store: Store;
@@ -13,6 +14,8 @@ export type Deps = {
   secret: string;
   now?: () => number;
   logger?: boolean;
+  /** Folder holding the exported web app. Served when it has an index.html. */
+  webDir?: string;
 };
 
 const sealedSchema = {
@@ -86,6 +89,7 @@ export function buildApp(deps: Deps) {
   };
 
   app.get('/health', async () => ({ ok: true }));
+  if (deps.webDir) registerWeb(app, deps.webDir);
 
   app.post<{ Body: { idToken: string; publicKey: string } }>('/v1/auth/google', {
     schema: {

@@ -50,7 +50,7 @@ export function Glass({
   return (
     <View style={[shadow, style]}>
       <View style={shell}>
-        {(Platform.OS === 'ios' || androidBlur) && (
+        {(Platform.OS === 'ios' || Platform.OS === 'web' || androidBlur) && (
           <BlurView
             style={StyleSheet.absoluteFill}
             intensity={strong ? 60 : 40}

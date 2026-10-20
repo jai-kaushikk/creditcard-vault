@@ -35,6 +35,15 @@ const config: ExpoConfig = {
     allowBackup: false,
     permissions: ['android.permission.USE_BIOMETRIC', 'android.permission.USE_FINGERPRINT'],
   },
+  web: {
+    output: 'single',
+    bundler: 'metro',
+    favicon: './assets/favicon.png',
+    name: 'CardVault',
+    shortName: 'CardVault',
+    themeColor: '#0f5c4a',
+    backgroundColor: '#f6f4ef',
+  },
   plugins: [
     'expo-router',
     'expo-font',

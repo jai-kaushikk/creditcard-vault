@@ -1,6 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { Amount, Notice, Panel } from '@/components/bits';
@@ -16,9 +15,10 @@ import { useLock } from '@/state/lock';
 import { useTheme } from '@/state/settings';
 import { useVault } from '@/state/vault';
 import { radius, type as typo } from '@/theme/tokens';
+import { usePreventCapture } from '@/lib/platform';
 
 export default function PayWithFriendsCard() {
-  usePreventScreenCapture('pay');
+  usePreventCapture('pay');
   const { cardId } = useLocalSearchParams<{ cardId: string }>();
   const { c } = useTheme();
   const { cards } = useVault();

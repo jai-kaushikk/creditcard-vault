@@ -26,7 +26,8 @@ if (process.env.STORE === 'memory') {
   mailbox = new PgRelay(pg);
 }
 
-const app = buildApp({ store, mailbox, verifyGoogle: googleVerifier(webClientId), secret, logger: true });
+const webDir = process.env.WEB_DIR ?? new URL('../web', import.meta.url).pathname;
+const app = buildApp({ store, mailbox, verifyGoogle: googleVerifier(webClientId), secret, logger: true, webDir });
 const port = Number(process.env.PORT ?? 8080);
 await app.listen({ port, host: '0.0.0.0' });
 

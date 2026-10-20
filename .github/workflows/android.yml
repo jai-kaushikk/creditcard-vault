@@ -73,7 +73,7 @@ jobs:
 
   deploy-server:
     name: Deploy server to Cloud Run
-    needs: [server-checks]
+    needs: [app-checks, server-checks]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -83,6 +83,20 @@ jobs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Export the web app
+        working-directory: app
+        env:
+          # No API URL: the web app calls the server it's served from.
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID || '420358690991-6d927rva07c59bttov8ciutl3i3hgdg4.apps.googleusercontent.com' }}
+        run: |
+          npm ci
+          npx expo export --platform web
+          cp -R dist/. ../server/web/
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -110,6 +124,7 @@ jobs:
           URL=$(gcloud run services describe cardvault-api --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.url)')
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           curl -fsS --retry 5 --retry-all-errors "$URL/health"
+          curl -fsS "$URL/" | grep -q 'id="root"'
           echo "Deployed $URL" >> "$GITHUB_STEP_SUMMARY"
 
   apk:

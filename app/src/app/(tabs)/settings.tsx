@@ -1,11 +1,12 @@
 import Constants from 'expo-constants';
-import { Alert, Pressable, View } from 'react-native';
-import { Avatar, Panel, Row, StatusBadge, Toggle } from '@/components/bits';
+import { Pressable, View } from 'react-native';
+import { Avatar, Notice, Panel, Row, StatusBadge, Toggle } from '@/components/bits';
 import { Button } from '@/components/Button';
 import { Screen, Title } from '@/components/layout';
 import { T } from '@/components/Text';
 import { googleConfigured, serverConfigured } from '@/lib/config';
 import { formatMoney } from '@/lib/money';
+import { confirmAction, isWeb } from '@/lib/platform';
 import { useAuth } from '@/state/auth';
 import { useData } from '@/state/data';
 import { useSettings } from '@/state/settings';
@@ -31,11 +32,17 @@ export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const data = useData();
 
-  const wipe = () =>
-    Alert.alert('Delete everything on this phone?', 'Your cards, friends and ledger copy are removed from this phone. This can’t be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await data.clearAll(); await signOut(); } },
-    ]);
+  const wipe = async () => {
+    const ok = await confirmAction(
+      isWeb ? 'Delete everything in this browser?' : 'Delete everything on this phone?',
+      'Your cards, friends and ledger copy are removed from this device. This can’t be undone.',
+      'Delete',
+      true,
+    );
+    if (!ok) return;
+    await data.clearAll();
+    await signOut();
+  };
 
   return (
     <Screen tabs>
@@ -45,7 +52,7 @@ export default function SettingsScreen() {
         <View style={{ flex: 1 }}>
           <T variant="body" style={{ fontFamily: fonts.semibold }}>{user?.name}</T>
           <T variant="label" color="inkMuted" style={{ fontFamily: fonts.regular }}>
-            {user?.mode === 'google' ? user.email : 'Offline on this phone'}
+            {user?.mode === 'google' ? user.email : 'Offline on this device'}
           </T>
         </View>
       </Panel>
@@ -67,11 +74,20 @@ export default function SettingsScreen() {
         <Row last title="Glass effects" subtitle="Off uses solid bars and sheets" right={<Toggle label="Glass effects" value={settings.glass} onChange={(v) => update({ glass: v })} />} />
       </Group>
 
-      <Group label="Security">
-        <Row title="Lock with biometrics" subtitle="To open the app and reveal numbers" right={<Toggle label="Lock with biometrics" value={settings.biometricLock} onChange={(v) => update({ biometricLock: v })} />} />
-        <Row title="Hide in app switcher" subtitle="Also blocks screenshots on Android" right={<Toggle label="Hide in app switcher" value={settings.hideInSwitcher} onChange={(v) => update({ hideInSwitcher: v })} />} />
-        <Row last title="Lock after" subtitle="Time in the background" chevron right={<T variant="label" color="inkMuted">{lockLabel(settings.lockAfterSeconds)}</T>} onPress={() => update({ lockAfterSeconds: next(LOCK_STEPS, settings.lockAfterSeconds) })} />
-      </Group>
+      {isWeb ? (
+        <Notice
+          tone="wait"
+          icon="lock"
+          title="Browser version"
+          body="Cards are encrypted in this browser, but there’s no fingerprint or Face ID lock and screenshots aren’t blocked. Use it only on your own device, and delete everything before you hand the device to anyone."
+        />
+      ) : (
+        <Group label="Security">
+          <Row title="Lock with biometrics" subtitle="To open the app and reveal numbers" right={<Toggle label="Lock with biometrics" value={settings.biometricLock} onChange={(v) => update({ biometricLock: v })} />} />
+          <Row title="Hide in app switcher" subtitle="Also blocks screenshots on Android" right={<Toggle label="Hide in app switcher" value={settings.hideInSwitcher} onChange={(v) => update({ hideInSwitcher: v })} />} />
+          <Row last title="Lock after" subtitle="Time in the background" chevron right={<T variant="label" color="inkMuted">{lockLabel(settings.lockAfterSeconds)}</T>} onPress={() => update({ lockAfterSeconds: next(LOCK_STEPS, settings.lockAfterSeconds) })} />
+        </Group>
+      )}
 
       <Group label="Sharing defaults">
         <Row title="Ask me for every OTP" subtitle="Can’t be turned off" right={<T variant="label" color="vault">Always on</T>} />
@@ -94,7 +110,7 @@ export default function SettingsScreen() {
 
       <View style={{ gap: 8, marginTop: 8 }}>
         <Button block label="Sign out" onPress={signOut} />
-        <Button block variant="danger" icon="trash" label="Delete everything on this phone" onPress={wipe} />
+        <Button block variant="danger" icon="trash" label={isWeb ? 'Delete everything in this browser' : 'Delete everything on this phone'} onPress={wipe} />
       </View>
       <T variant="caption" color="inkMuted" style={{ textAlign: 'center' }}>
         CardVault {Constants.expoConfig?.version ?? ''} · cards are stored only on this device

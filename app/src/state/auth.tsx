@@ -1,13 +1,8 @@
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, clearSession, loadSession } from '@/lib/api';
-import { config, googleConfigured, serverConfigured } from '@/lib/config';
+import { googleConfigured, serverConfigured } from '@/lib/config';
 import { myPublicKey } from '@/lib/crypto';
+import { googleSignIn, googleSignOut, type GoogleProfile } from '@/lib/google';
 import { getJSON, remove, setJSON } from '@/lib/secure';
 
 export type User = {
@@ -21,17 +16,16 @@ export type User = {
 type Ctx = {
   status: 'loading' | 'signedOut' | 'signedIn';
   user: User | null;
+  /** Native: opens Google's sign-in sheet. */
   signInWithGoogle: () => Promise<'ok' | 'cancelled'>;
+  /** Web: Google's own button hands us the ID token directly. */
+  signInWithIdToken: (idToken: string, profile: GoogleProfile) => Promise<void>;
   continueOffline: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const KEY = 'cv.user.v1';
 const AuthContext = createContext<Ctx | null>(null);
-
-if (googleConfigured) {
-  GoogleSignin.configure({ webClientId: config.googleWebClientId });
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -52,45 +46,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('signedIn');
   }, []);
 
+  const signInWithIdToken = useCallback(async (idToken: string | null, profile: GoogleProfile) => {
+    let id = `g_${profile.id}`;
+    if (serverConfigured) {
+      if (!idToken) throw new Error('Google didn’t return an ID token. Check the web client ID.');
+      const session = await api.signInWithGoogle(idToken, await myPublicKey());
+      id = session.userId;
+    }
+    await save({ id, email: profile.email, name: profile.name ?? profile.email.split('@')[0], photo: profile.photo, mode: 'google' });
+  }, [save]);
+
   const signInWithGoogle = useCallback(async () => {
     if (!googleConfigured) {
       throw new Error('Google sign-in isn’t set up in this build yet. Add GOOGLE_WEB_CLIENT_ID and rebuild.');
     }
-    try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const res = await GoogleSignin.signIn();
-      if (!isSuccessResponse(res)) return 'cancelled' as const;
-      const { idToken, user: g } = res.data;
-      let id = `g_${g.id}`;
-      if (serverConfigured) {
-        if (!idToken) throw new Error('Google didn’t return an ID token. Check the web client ID.');
-        const session = await api.signInWithGoogle(idToken, await myPublicKey());
-        id = session.userId;
-      }
-      await save({ id, email: g.email, name: g.name ?? g.email.split('@')[0], photo: g.photo, mode: 'google' });
-      return 'ok' as const;
-    } catch (e) {
-      if (isErrorWithCode(e)) {
-        if (e.code === statusCodes.IN_PROGRESS) return 'cancelled' as const;
-        if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-          throw new Error('Google Play services are missing or out of date on this phone.');
-        }
-        if (e.code === 'DEVELOPER_ERROR' || e.code === '10') {
-          throw new Error('Google rejected this app’s signing key. Register the APK’s SHA-1 in Google Cloud (see README).');
-        }
-      }
-      throw e;
-    }
-  }, [save]);
+    const res = await googleSignIn();
+    if (res === 'cancelled') return 'cancelled' as const;
+    await signInWithIdToken(res.idToken, res.profile);
+    return 'ok' as const;
+  }, [signInWithIdToken]);
 
   const continueOffline = useCallback(async () => {
     await save({ id: 'me', email: '', name: 'You', mode: 'offline' });
   }, [save]);
 
   const signOut = useCallback(async () => {
-    if (user?.mode === 'google' && googleConfigured) {
-      await GoogleSignin.signOut().catch(() => {});
-    }
+    if (user?.mode === 'google') await googleSignOut();
     await clearSession();
     await remove(KEY);
     setUser(null);
@@ -98,8 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const value = useMemo(
-    () => ({ status, user, signInWithGoogle, continueOffline, signOut }),
-    [status, user, signInWithGoogle, continueOffline, signOut],
+    () => ({ status, user, signInWithGoogle, signInWithIdToken, continueOffline, signOut }),
+    [status, user, signInWithGoogle, signInWithIdToken, continueOffline, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

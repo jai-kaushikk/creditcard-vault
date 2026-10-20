@@ -1,5 +1,4 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { Avatar, Chip, Notice, Panel, Row, Toggle } from '@/components/bits';
@@ -13,12 +12,13 @@ import { useLock } from '@/state/lock';
 import { useSettings } from '@/state/settings';
 import { useVault } from '@/state/vault';
 import { fonts } from '@/theme/tokens';
+import { usePreventCapture } from '@/lib/platform';
 
 const LIMITS = [200000, 500000, 1000000];
 const DAYS = [1, 7, 14, 30];
 
 export default function ShareCard() {
-  usePreventScreenCapture('share-card');
+  usePreventCapture('share-card');
   const { cardId } = useLocalSearchParams<{ cardId: string }>();
   const { cards } = useVault();
   const data = useData();

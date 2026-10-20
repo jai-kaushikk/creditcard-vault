@@ -10,6 +10,7 @@ import { BalanceCard } from '@/components/rows';
 import { T } from '@/components/Text';
 import { ownerTodo, OTP_TTL_MS } from '@/lib/ledger';
 import { formatMoney } from '@/lib/money';
+import { isWeb } from '@/lib/platform';
 import { useNow } from '@/lib/useNow';
 import { useData } from '@/state/data';
 import { useTheme } from '@/state/settings';
@@ -36,7 +37,7 @@ export default function VaultScreen() {
         <Glass>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6 }}>
             <Icon name="lock" size={14} color={c.vault} strokeWidth={2} />
-            <T variant="caption" color="vault" style={{ fontFamily: fonts.semibold }}>{data.demo ? 'Demo' : 'Locked'}</T>
+            <T variant="caption" color="vault" style={{ fontFamily: fonts.semibold }}>{data.demo ? 'Demo' : isWeb ? 'Encrypted' : 'Locked'}</T>
           </View>
         </Glass>
       </View>
@@ -78,7 +79,7 @@ export default function VaultScreen() {
       <SectionHeader title={`My cards · ${own.length}`} action="Add card" onAction={() => router.push('/card/add')} />
       {ready && own.length === 0 ? (
         <Panel style={{ gap: 12 }}>
-          <T variant="body">Your cards stay on this phone, encrypted and locked. Add one to start.</T>
+          <T variant="body">Your cards stay on this device, encrypted. Add one to start.</T>
           <Button variant="primary" icon="plus" label="Add a card" onPress={() => router.push('/card/add')} />
           {!data.demo ? <Button variant="quiet" label="Load demo data to look around" onPress={data.loadDemo} /> : null}
         </Panel>

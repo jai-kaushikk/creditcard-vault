@@ -1,6 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { Notice } from '@/components/bits';
@@ -15,9 +14,10 @@ import { useLock } from '@/state/lock';
 import { useTheme } from '@/state/settings';
 import { useVault } from '@/state/vault';
 import { radius, type as typo } from '@/theme/tokens';
+import { usePreventCapture } from '@/lib/platform';
 
 export default function OtpRequest() {
-  usePreventScreenCapture('otp');
+  usePreventCapture('otp');
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const data = useData();

@@ -56,6 +56,7 @@ function Shell() {
 
   // Hide the vault from the app switcher (Android: FLAG_SECURE, which also blocks screenshots).
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     if (!settings.hideInSwitcher) {
       if (Platform.OS === 'ios') ScreenCapture.disableAppSwitcherProtectionAsync().catch(() => {});
       else ScreenCapture.allowScreenCaptureAsync('app').catch(() => {});

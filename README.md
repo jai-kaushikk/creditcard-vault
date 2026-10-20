@@ -8,6 +8,18 @@ A card wallet for friends who lend each other their credit cards. Cards stay enc
 
 Every push builds a fresh APK in GitHub Actions and attaches it to a release. On your phone: open the release, download `CardVault-….apk`, open it, and allow "Install unknown apps" for your browser when Android asks.
 
+## Use it in a browser (iPhone, desktop)
+
+**[cardvault-api-420358690991.asia-south1.run.app](https://cardvault-api-420358690991.asia-south1.run.app)**
+
+A temporary stand-in until the iOS app is on TestFlight. On an iPhone, open it in Safari and use **Share → Add to Home Screen**. It talks to the same server as the Android app, so friends on Android and on the web can share cards and OTPs with each other.
+
+The browser version is weaker than the app: cards are encrypted with a key the browser won't export (WebCrypto, kept in IndexedDB), but there's no fingerprint or Face ID lock and screenshots aren't blocked. Use it only on your own device. Clearing the site's data in the browser deletes the cards.
+
+For Google sign-in to work there, the web OAuth client needs `https://cardvault-api-420358690991.asia-south1.run.app` under **Authorized JavaScript origins**.
+
+## What needs setting up
+
 What works depends on two settings baked into the build (see [Setup](#setup)):
 
 | | Without setup | With Google sign-in | With Google sign-in + server |
@@ -20,10 +32,10 @@ What works depends on two settings baked into the build (see [Setup](#setup)):
 ## Repository
 
 ```
-app/            Expo (React Native) app for Android and iOS
-server/         API: stores transactions only; relays sealed card shares and OTPs from memory
+app/            Expo (React Native) app for Android, iOS and the web
+server/         API: stores transactions only; relays sealed card shares and OTPs. Also serves the web app
 design-system/  CardVault design system: tokens, components, product and architecture specs
-.github/        CI: tests, then the APK build and release
+.github/        CI: tests, then the server + web deploy and the APK build and release
 ```
 
 ## Setup
@@ -80,7 +92,7 @@ cd server && npm ci && npm run typecheck && npm test   # TEST_DATABASE_URL=… t
 
 ## Known limits in this version
 
-- **Android only for downloads.** The same code builds for iOS, but installing it needs an Apple developer account (TestFlight / EAS).
+- **Android only for downloads.** The same code builds for iOS, but installing it needs an Apple developer account (TestFlight / EAS). Until then iPhones use the browser version.
 - **OTP entry is manual:** the owner pastes or types it. Reading the bank SMS automatically (Android SMS User Consent) is a next step. iOS doesn't allow it at all.
 - **Updates arrive by polling** every few seconds while the app is open. There are no push notifications yet.
 - The admin dashboard is designed (`design-system/03-admin.md`) but not built yet.

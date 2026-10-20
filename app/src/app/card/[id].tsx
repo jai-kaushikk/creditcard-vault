@@ -1,8 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { Avatar, Notice, Panel, Row, StatusBadge } from '@/components/bits';
 import { Button } from '@/components/Button';
 import { CreditCardView } from '@/components/CreditCardView';
@@ -16,11 +15,12 @@ import { useData } from '@/state/data';
 import { useLock } from '@/state/lock';
 import { useVault } from '@/state/vault';
 import { fonts } from '@/theme/tokens';
+import { confirmAction, isWeb, notify, usePreventCapture } from '@/lib/platform';
 
 const REVEAL_MS = 30_000;
 
 export default function CardDetail() {
-  usePreventScreenCapture('card-detail');
+  usePreventCapture('card-detail');
   const { id } = useLocalSearchParams<{ id: string }>();
   const { cards, removeCard } = useVault();
   const data = useData();
@@ -39,7 +39,7 @@ export default function CardDetail() {
     return (
       <Screen>
         <TopBar back="Vault" />
-        <Notice tone="info" title="This card isn’t on this phone any more." />
+        <Notice tone="info" title="This card isn’t on this device any more." />
       </Screen>
     );
   }
@@ -55,13 +55,14 @@ export default function CardDetail() {
   const copy = async () => {
     if (!(await confirm('Copy card details'))) return;
     await Clipboard.setStringAsync(`${formatCardNumber(card.number)}  ${card.expiry}`);
-    Alert.alert('Copied', 'Card number and expiry are on the clipboard. Clear it after you paste.');
+    notify('Copied', 'Card number and expiry are on the clipboard. Clear it after you paste.');
   };
-  const removeIt = () =>
-    Alert.alert(`Remove ${card.nickname}?`, 'It’s deleted from this phone. Anyone it was shared with keeps their copy until the share ends.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { await removeCard(card.id); router.back(); } },
-    ]);
+  const removeIt = async () => {
+    const ok = await confirmAction(`Remove ${card.nickname}?`, 'It’s deleted from this device. Anyone it was shared with keeps their copy until the share ends.', 'Remove', true);
+    if (!ok) return;
+    await removeCard(card.id);
+    router.back();
+  };
 
   return (
     <Screen>
@@ -71,10 +72,10 @@ export default function CardDetail() {
         <CreditCardView {...card} revealed={revealed} tag={shareFriend ? `Shared with ${shareFriend.name.split(' ')[0]}` : null} />
       </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Button style={{ flex: 1 }} block icon={revealed ? 'eyeOff' : 'eye'} label={revealed ? 'Hide number' : 'Show number'} onPress={toggleReveal} />
-        <Button style={{ flex: 1 }} block icon="copy" label="Copy details" onPress={copy} />
+        <Button style={{ flex: 1 }} block icon={revealed ? 'eyeOff' : 'eye'} label={revealed ? 'Hide' : 'Reveal'} onPress={toggleReveal} />
+        <Button style={{ flex: 1 }} block icon="copy" label="Copy" onPress={copy} />
       </View>
-      <T variant="caption" color="inkMuted" style={{ textAlign: 'center', marginTop: -8 }}>Biometrics required · hides again after 30 seconds</T>
+      <T variant="caption" color="inkMuted" style={{ textAlign: 'center', marginTop: -8 }}>{isWeb ? 'Hides again after 30 seconds' : 'Biometrics required · hides again after 30 seconds'}</T>
 
       <Panel padded={false}>
         <Row title="Valid thru" right={<T variant="label">{card.expiry}</T>} />
@@ -127,7 +128,7 @@ export default function CardDetail() {
         </>
       ) : null}
 
-      <Button variant="quiet" block icon="trash" label="Remove card from this phone" onPress={removeIt} />
+      <Button variant="quiet" block icon="trash" label="Remove card from this device" onPress={removeIt} />
     </Screen>
   );
 }

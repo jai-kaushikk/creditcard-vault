@@ -1,6 +1,6 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useAuth } from './auth';
 import { useSettings } from './settings';
 
@@ -27,7 +27,8 @@ export function LockProvider({ children }: { children: ReactNode }) {
   // Until settings load we don't know whether the lock is on; stay locked.
   const [locked, setLocked] = useState(true);
   const backgroundAt = useRef<number | null>(null);
-  const enabled = settings.biometricLock;
+  // Browsers have no biometric prompt, so the web version doesn't pretend to lock.
+  const enabled = settings.biometricLock && Platform.OS !== 'web';
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -53,7 +54,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
   }, [enabled]);
 
   const value = useMemo(
-    () => ({ locked: (!ready || enabled) && status === 'signedIn' && locked, unlock, confirm }),
+    () => ({ locked: (!ready || enabled) && Platform.OS !== 'web' && status === 'signedIn' && locked, unlock, confirm }),
     [ready, enabled, status, locked, unlock, confirm],
   );
   return <LockContext.Provider value={value}>{children}</LockContext.Provider>;
