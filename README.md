@@ -66,9 +66,13 @@ Then add the repository variable `CARDVAULT_API_URL` = your server's `https://�
 
 Local run: `cd server && STORE=memory GOOGLE_WEB_CLIENT_ID=… SESSION_SECRET=… WEB_DIR=../app/dist go run ./cmd/server`.
 
-### 3. Your own signing key (before the Play Store)
+### 3. Play Store bundle (private)
 
-CI signs with the standard React Native debug key so Google sign-in has a stable SHA-1. For a real release, create a keystore and add these repository **secrets**: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Then add that key's SHA-1 to the Android OAuth client too.
+The public APK stays signed with the standard React Native debug key, so testers' installs keep updating and Google sign-in keeps its SHA-1. For the Play Store, CI also builds an **Android App Bundle (.aab)** signed with your own **upload key**, and puts it in a **private** Cloud Storage bucket, never in the public release:
+
+1. Once, in Google Cloud Shell: `curl -fsSLO https://raw.githubusercontent.com/jai-kaushikk/creditcard-vault/claude/exciting-edison-pqekky/scripts/setup-play-signing.sh && bash setup-play-signing.sh` (read it first; it's short). It generates the upload key in your project's Secret Manager, gives CI read access to just that key, and creates the private bucket `project-1ca83d7c-09d0-46ec-800-cardvault-releases`.
+2. Every build after that drops `CardVault-<version>-build<N>.aab` in the bucket. Download it from Cloud Console → Cloud Storage → that bucket.
+3. In Play Console, upload it to a testing track and keep **Play App Signing** on (the default). Google then signs installs with its own app signing key: add that key's SHA-1 (Play Console → Test and release → App integrity) to a new Android OAuth client for `app.cardvault`, or Google sign-in fails for Play installs.
 
 ## How it works
 

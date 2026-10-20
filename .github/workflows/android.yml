@@ -139,6 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write   # reads the Play upload key from Secret Manager; no keys stored in GitHub
     defaults:
       run:
         working-directory: app
@@ -161,23 +162,10 @@ jobs:
       - run: npm ci
       - name: Generate the Android project
         run: npx expo prebuild --platform android --no-install
-      - name: Use your release keystore if one is configured
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "CV_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-            echo "Signing with the release keystore from secrets."
-          else
-            echo "No ANDROID_KEYSTORE_BASE64 secret: signing with the standard debug keystore (SHA-1 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25)."
-          fi
+      # The APK on the public release is signed with the standard debug key, so
+      # testers' installs keep updating. Play Store bundles get the upload key below.
       - name: Build release APK
         working-directory: app/android
-        env:
-          CV_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          CV_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          CV_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
       - name: Name the APK
         id: apk
@@ -218,3 +206,40 @@ jobs:
             --title "CardVault ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
             --notes "$NOTES" \
             --latest
+
+      # Play Store bundle (.aab), signed with the upload key that scripts/setup-play-signing.sh
+      # created in Secret Manager. It goes to a private bucket, never to the public release.
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Fetch the Play upload key
+        id: upload-key
+        run: |
+          if gcloud secrets versions access latest --secret=cardvault-upload-keystore --project "$GCP_PROJECT_ID" --out-file="$RUNNER_TEMP/upload.p12" 2>/dev/null &&
+             gcloud secrets versions access latest --secret=cardvault-upload-keystore-password --project "$GCP_PROJECT_ID" --out-file="$RUNNER_TEMP/upload.pass" 2>/dev/null; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "No Play upload key yet, so no .aab this time. Run scripts/setup-play-signing.sh once in Cloud Shell." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Build the Play Store bundle and put it in the private bucket
+        if: steps.upload-key.outputs.ready == 'true'
+        working-directory: app/android
+        run: |
+          export CV_KEYSTORE_FILE="$RUNNER_TEMP/upload.p12" CV_KEY_ALIAS=upload
+          CV_KEYSTORE_PASSWORD="$(cat "$RUNNER_TEMP/upload.pass")"
+          export CV_KEYSTORE_PASSWORD CV_KEY_PASSWORD="$CV_KEYSTORE_PASSWORD"
+          ./gradlew bundleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          # Never ship a bundle signed with the public debug key.
+          keytool -printcert -jarfile "$AAB" > "$RUNNER_TEMP/aab-cert.txt"
+          grep -E "Owner:|SHA256:" "$RUNNER_TEMP/aab-cert.txt"
+          if grep -q "Android Debug" "$RUNNER_TEMP/aab-cert.txt"; then echo "The bundle is signed with the debug key." >&2; exit 1; fi
+          NAME="CardVault-${{ steps.apk.outputs.version }}-build${{ github.run_number }}.aab"
+          gcloud storage cp "$AAB" "gs://${GCP_PROJECT_ID}-cardvault-releases/$NAME"
+          echo "Play Store bundle: \`$NAME\` in the private bucket ${GCP_PROJECT_ID}-cardvault-releases (versionCode ${{ github.run_number }})." >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the upload key from the runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.p12" "$RUNNER_TEMP/upload.pass"
