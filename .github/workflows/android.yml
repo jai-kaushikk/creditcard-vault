@@ -217,13 +217,16 @@ jobs:
       - name: Fetch the Play upload key
         id: upload-key
         run: |
-          if gcloud secrets versions access latest --secret=cardvault-upload-keystore --project "$GCP_PROJECT_ID" --out-file="$RUNNER_TEMP/upload.p12" 2>/dev/null &&
-             gcloud secrets versions access latest --secret=cardvault-upload-keystore-password --project "$GCP_PROJECT_ID" --out-file="$RUNNER_TEMP/upload.pass" 2>/dev/null; then
+          if gcloud secrets versions access latest --secret=cardvault-upload-keystore --project "$GCP_PROJECT_ID" --out-file="$RUNNER_TEMP/upload.p12" 2>"$RUNNER_TEMP/key.err" &&
+             gcloud secrets versions access latest --secret=cardvault-upload-keystore-password --project "$GCP_PROJECT_ID" --out-file="$RUNNER_TEMP/upload.pass" 2>>"$RUNNER_TEMP/key.err"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "No Play upload key yet, so no .aab this time. Run scripts/setup-play-signing.sh once in Cloud Shell." | tee -a "$GITHUB_STEP_SUMMARY"
+            # gcloud's reason (not found vs. permission denied); it never contains the secret.
+            grep -m1 -E "ERROR|NOT_FOUND|PERMISSION" "$RUNNER_TEMP/key.err" | cut -c1-200 | tee -a "$GITHUB_STEP_SUMMARY" || true
           fi
+          rm -f "$RUNNER_TEMP/key.err"
       - name: Build the Play Store bundle and put it in the private bucket
         if: steps.upload-key.outputs.ready == 'true'
         working-directory: app/android
