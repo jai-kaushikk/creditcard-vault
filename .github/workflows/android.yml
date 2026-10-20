@@ -74,8 +74,7 @@ jobs:
   deploy-server:
     name: Deploy server to Cloud Run
     needs: [server-checks]
-    # Needs the Google web client ID; skipped until the repository variable exists.
-    if: github.event_name == 'push' && vars.GOOGLE_WEB_CLIENT_ID != ''
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -105,7 +104,7 @@ jobs:
             --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT" \
             --add-cloudsql-instances "$CLOUDSQL_CONNECTION" \
             --set-secrets "DATABASE_URL=cardvault-database-url:latest,SESSION_SECRET=cardvault-session-secret:latest" \
-            --set-env-vars "GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}" \
+            --set-env-vars "GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID || '420358690991-6d927rva07c59bttov8ciutl3i3hgdg4.apps.googleusercontent.com' }}" \
             --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 --concurrency 80 \
             --no-invoker-iam-check --quiet
           URL=$(gcloud run services describe cardvault-api --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.url)')
@@ -130,7 +129,8 @@ jobs:
     env:
       CI: 1
       # Repository variables (Settings → Secrets and variables → Actions → Variables).
-      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+      # The Google web client ID is public (it ships in the APK); a repository variable overrides it.
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID || '420358690991-6d927rva07c59bttov8ciutl3i3hgdg4.apps.googleusercontent.com' }}
       EXPO_PUBLIC_API_URL: ${{ needs.deploy-server.outputs.url || vars.CARDVAULT_API_URL }}
       ANDROID_VERSION_CODE: ${{ github.run_number }}
     steps:
@@ -184,7 +184,7 @@ jobs:
       - name: Publish a GitHub Release with the APK
         env:
           GH_TOKEN: ${{ github.token }}
-          GOOGLE_SET: ${{ vars.GOOGLE_WEB_CLIENT_ID != '' }}
+          GOOGLE_SET: 'true'
           SERVER_SET: ${{ (needs.deploy-server.outputs.url || vars.CARDVAULT_API_URL) != '' }}
         run: |
           TAG="apk-${{ steps.apk.outputs.version }}-build${{ github.run_number }}"

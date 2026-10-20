@@ -40,7 +40,7 @@ design-system/  CardVault design system: tokens, components, product and archite
 
 ### 2. The server (needed for friends, sharing and OTPs between phones)
 
-**On Google Cloud (set up for this repo):** CI deploys `server/` to Cloud Run (`cardvault-api`, Mumbai) with Cloud SQL Postgres, signing in to GCP with Workload Identity Federation: no service-account keys exist. The deploy runs on every push once the `GOOGLE_WEB_CLIENT_ID` repository variable is set, and the APK is built against the deployed URL automatically. The GCP identifiers live at the top of `.github/workflows/android.yml`; the database URL and session secret live in Secret Manager (`cardvault-database-url`, `cardvault-session-secret`).
+**On Google Cloud (set up for this repo):** CI deploys `server/` to Cloud Run (`cardvault-api`, Mumbai) with Cloud SQL Postgres, signing in to GCP with Workload Identity Federation: no service-account keys exist. The deploy runs on every push, and the APK is built against the deployed URL automatically. The GCP identifiers live at the top of `.github/workflows/android.yml`; the database URL and session secret live in Secret Manager (`cardvault-database-url`, `cardvault-session-secret`).
 
 **Anywhere else:** run the Docker image on any host that gives you HTTPS (Render, Railway, Fly.io…) with:
 
