@@ -1,6 +1,7 @@
 import { buildApp } from './app.ts';
 import { googleVerifier } from './auth.ts';
-import { PgStore } from './pgStore.ts';
+import type { Relay } from './mailbox.ts';
+import { PgRelay, PgStore } from './pgStore.ts';
 import { MemoryStore, type Store } from './store.ts';
 
 const env = (name: string, fallback?: string) => {
@@ -14,6 +15,7 @@ const secret = env('SESSION_SECRET');
 if (secret.length < 32) throw new Error('SESSION_SECRET must be at least 32 characters.');
 
 let store: Store;
+let mailbox: Relay | undefined;
 if (process.env.STORE === 'memory') {
   console.warn('STORE=memory: data is lost on restart. Use DATABASE_URL in production.');
   store = new MemoryStore();
@@ -21,9 +23,10 @@ if (process.env.STORE === 'memory') {
   const pg = new PgStore(env('DATABASE_URL'));
   await pg.migrate();
   store = pg;
+  mailbox = new PgRelay(pg);
 }
 
-const app = buildApp({ store, verifyGoogle: googleVerifier(webClientId), secret, logger: true });
+const app = buildApp({ store, mailbox, verifyGoogle: googleVerifier(webClientId), secret, logger: true });
 const port = Number(process.env.PORT ?? 8080);
 await app.listen({ port, host: '0.0.0.0' });
 

@@ -1,5 +1,7 @@
 -- CardVault keeps transactions only. Card numbers, CVVs, OTPs, names and
--- balances never reach this database.
+-- balances never reach this database in readable form. The one exception is
+-- relay_messages: sealed (end-to-end encrypted) card shares and OTPs waiting
+-- for delivery, deleted when fetched and expired after minutes to a day.
 
 create table if not exists accounts (
   id          text primary key,              -- usr_… derived from a hash of the Google subject
@@ -41,3 +43,15 @@ create table if not exists transaction_events (   -- append-only audit trail
   meta            jsonb not null default '{}'
 );
 create index if not exists transaction_events_txn on transaction_events (transaction_id, at);
+
+create table if not exists relay_messages (     -- sealed, short-lived, deleted on delivery
+  id          uuid primary key,
+  to_id       text not null,
+  from_id     text not null,
+  kind        text not null check (kind in ('card_share', 'card_unshare', 'otp')),
+  txn_id      text,
+  payload     jsonb not null,                 -- {epk, nonce, box}: ciphertext only the recipient can open
+  sent_at     timestamptz not null,
+  expires_at  timestamptz not null
+);
+create index if not exists relay_messages_to on relay_messages (to_id, expires_at);

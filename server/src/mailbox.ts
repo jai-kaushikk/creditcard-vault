@@ -1,21 +1,30 @@
 import { randomUUID } from 'node:crypto';
 
-// Sealed messages between phones (card shares, OTPs). Held in memory only,
-// never written to the database, deleted on delivery or when they expire.
-// One server instance: if you run several, put this in Redis instead.
+// Sealed messages between phones (card shares, OTPs). The server can't read
+// them; each is deleted on delivery or when it expires. In production they sit
+// in the relay_messages table (see pgStore.ts) so a scaled-to-zero or
+// redeployed server doesn't lose them; this in-memory relay is for dev/tests.
 
 export type Sealed = { epk: string; nonce: string; box: string };
 export type MailKind = 'card_share' | 'card_unshare' | 'otp';
 export type MailMessage = { id: string; from: string; to: string; kind: MailKind; txnId: string | null; payload: Sealed; sentAt: string; expiresAt: number };
 
-const TTL: Record<MailKind, number> = {
+export type OutgoingMail = { from: string; to: string; kind: MailKind; txnId?: string | null; payload: Sealed };
+
+export interface Relay {
+  send(msg: OutgoingMail): Promise<MailMessage>;
+  /** Returns and removes everything waiting for this user. */
+  drain(userId: string): Promise<MailMessage[]>;
+}
+
+export const TTL: Record<MailKind, number> = {
   otp: 5 * 60 * 1000,
   card_share: 24 * 60 * 60 * 1000,
   card_unshare: 7 * 24 * 60 * 60 * 1000,
 };
 const MAX_PER_INBOX = 200;
 
-export class Mailbox {
+export class Mailbox implements Relay {
   private boxes = new Map<string, MailMessage[]>();
   private now: () => number;
 
@@ -23,7 +32,7 @@ export class Mailbox {
     this.now = now;
   }
 
-  send(msg: { from: string; to: string; kind: MailKind; txnId?: string | null; payload: Sealed }): MailMessage {
+  async send(msg: OutgoingMail): Promise<MailMessage> {
     const t = this.now();
     const m: MailMessage = { id: randomUUID(), txnId: null, ...msg, sentAt: new Date(t).toISOString(), expiresAt: t + TTL[msg.kind] };
     const box = this.live(msg.to);
@@ -33,8 +42,7 @@ export class Mailbox {
     return m;
   }
 
-  /** Returns and removes everything waiting for this user. */
-  drain(userId: string): MailMessage[] {
+  async drain(userId: string): Promise<MailMessage[]> {
     const box = this.live(userId);
     this.boxes.delete(userId);
     return box;

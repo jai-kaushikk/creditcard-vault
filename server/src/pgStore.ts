@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
+import { randomUUID } from 'node:crypto';
+import { TTL, type MailMessage, type OutgoingMail, type Relay } from './mailbox.ts';
 import type { Txn } from './rules.ts';
 import type { Account, Store, TxnEvent } from './store.ts';
 
@@ -119,5 +121,45 @@ export class PgStore implements Store {
   }
   async close() {
     await this.pool.end();
+  }
+}
+
+/** Sealed messages in Postgres: deleted on delivery, expired ones swept on every read. */
+export class PgRelay implements Relay {
+  private db: PgStore;
+  private now: () => number;
+
+  constructor(db: PgStore, now: () => number = Date.now) {
+    this.db = db;
+    this.now = now;
+  }
+
+  async send(msg: OutgoingMail): Promise<MailMessage> {
+    const t = this.now();
+    const m: MailMessage = { id: randomUUID(), txnId: null, ...msg, sentAt: new Date(t).toISOString(), expiresAt: t + TTL[msg.kind] };
+    await this.db.query(
+      `insert into relay_messages (id, to_id, from_id, kind, txn_id, payload, sent_at, expires_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [m.id, m.to, m.from, m.kind, m.txnId, JSON.stringify(m.payload), m.sentAt, new Date(m.expiresAt).toISOString()],
+    );
+    return m;
+  }
+
+  async drain(userId: string): Promise<MailMessage[]> {
+    const nowIso = new Date(this.now()).toISOString();
+    await this.db.query('delete from relay_messages where expires_at <= $1', [nowIso]);
+    const { rows } = await this.db.query('delete from relay_messages where to_id = $1 returning *', [userId]);
+    return rows
+      .map((r) => ({
+        id: String(r.id),
+        from: String(r.from_id),
+        to: String(r.to_id),
+        kind: r.kind as MailMessage['kind'],
+        txnId: (r.txn_id as string) ?? null,
+        payload: r.payload as MailMessage['payload'],
+        sentAt: iso(r.sent_at)!,
+        expiresAt: Date.parse(iso(r.expires_at)!),
+      }))
+      .sort((a, b) => a.sentAt.localeCompare(b.sentAt));
   }
 }

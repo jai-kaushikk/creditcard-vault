@@ -40,7 +40,9 @@ design-system/  CardVault design system: tokens, components, product and archite
 
 ### 2. The server (needed for friends, sharing and OTPs between phones)
 
-`server/` is a small Node service backed by PostgreSQL. Run the Docker image anywhere that gives you HTTPS (Render, Railway, Fly.io, Cloud Run…) with:
+**On Google Cloud (set up for this repo):** CI deploys `server/` to Cloud Run (`cardvault-api`, Mumbai) with Cloud SQL Postgres, signing in to GCP with Workload Identity Federation: no service-account keys exist. The deploy runs on every push once the `GOOGLE_WEB_CLIENT_ID` repository variable is set, and the APK is built against the deployed URL automatically. The GCP identifiers live at the top of `.github/workflows/android.yml`; the database URL and session secret live in Secret Manager (`cardvault-database-url`, `cardvault-session-secret`).
+
+**Anywhere else:** run the Docker image on any host that gives you HTTPS (Render, Railway, Fly.io…) with:
 
 | Env var | Value |
 | --- | --- |
@@ -64,7 +66,7 @@ CI signs with the standard React Native debug key so Google sign-in has a stable
 4. **Recorded only on success.** They report the result and you confirm the charge. Then the transaction is *confirmed*: +lent for you, −owed for them. If you disagree, it becomes *disputed*. If nobody shares an OTP within 3 minutes, it *expires* and nothing is recorded.
 5. **Settle up** by recording a repayment (UPI, cash…). The other person confirms it.
 
-The server's database holds `transactions`, an append-only `transaction_events` audit log, and a minimal `accounts` table (an id derived from a hash of the Google account, an email hash for friend lookup, and the public key). No names, card data, OTPs or balances.
+The server's database holds `transactions`, an append-only `transaction_events` audit log, and a minimal `accounts` table (an id derived from a hash of the Google account, an email hash for friend lookup, and the public key). No names, card data, OTPs or balances. Sealed card shares and OTPs wait in `relay_messages` as ciphertext only the recipient's phone can open, and are deleted when fetched or when they expire.
 
 ## Development
 
@@ -81,11 +83,10 @@ cd server && npm ci && npm run typecheck && npm test   # TEST_DATABASE_URL=… t
 - **Android only for downloads.** The same code builds for iOS, but installing it needs an Apple developer account (TestFlight / EAS).
 - **OTP entry is manual:** the owner pastes or types it. Reading the bank SMS automatically (Android SMS User Consent) is a next step. iOS doesn't allow it at all.
 - **Updates arrive by polling** every few seconds while the app is open. There are no push notifications yet.
-- **One server instance:** the relay mailbox lives in memory. Use Redis if you scale out.
 - The admin dashboard is designed (`design-system/03-admin.md`) but not built yet.
 
 ## Privacy
 
-Card details never leave the phone unencrypted, and the server never stores them. OTPs and card shares are end-to-end encrypted and held in server memory only until delivered (5 minutes for OTPs, 24 hours for shares).
+Card details never leave the phone unencrypted, and the server can't read them. OTPs and card shares are end-to-end encrypted and kept only until delivered: at most 5 minutes for OTPs and 24 hours for shares.
 
 **Before launch:** most card-issuer terms make the cardholder liable for, and often prohibit, letting someone else use their card or sharing an OTP. Get legal review for each market.

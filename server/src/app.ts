@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { accountIdFor, emailHash, issueSession, readSession, type VerifyGoogle } from './auth.ts';
-import { Mailbox, type Sealed } from './mailbox.ts';
+import { Mailbox, type Relay, type Sealed } from './mailbox.ts';
 import * as rules from './rules.ts';
 import type { Store } from './store.ts';
 
 export type Deps = {
   store: Store;
-  mailbox?: Mailbox;
+  mailbox?: Relay;
   verifyGoogle: VerifyGoogle;
   /** Signs sessions and keys the email/subject hashes. Keep it secret and stable. */
   secret: string;
@@ -191,7 +191,7 @@ export function buildApp(deps: Deps) {
     }, async (req) => {
       const t = await loadTxn(req.params.id, req.userId);
       const next = rules.shareOtp(t, req.userId, now());
-      mailbox.send({ from: req.userId, to: t.borrowerId, kind: 'otp', txnId: t.id, payload: req.body.payload });
+      await mailbox.send({ from: req.userId, to: t.borrowerId, kind: 'otp', txnId: t.id, payload: req.body.payload });
       return save(t, next, req.userId, 'otp_shared');
     });
 
@@ -281,12 +281,12 @@ export function buildApp(deps: Deps) {
     }, async (req, reply) => {
       if (req.body.to === req.userId) throw new rules.RuleError(400, 'That’s you.');
       if (!(await store.accountById(req.body.to))) throw new rules.RuleError(404, 'No such friend.');
-      const m = mailbox.send({ from: req.userId, ...req.body });
+      const m = await mailbox.send({ from: req.userId, ...req.body });
       return reply.code(201).send({ id: m.id });
     });
 
     priv.get('/v1/mailbox', async (req) => ({
-      messages: mailbox.drain(req.userId).map(({ id, from, kind, txnId, payload, sentAt }) => ({ id, from, kind, txnId, payload, sentAt })),
+      messages: (await mailbox.drain(req.userId)).map(({ id, from, kind, txnId, payload, sentAt }) => ({ id, from, kind, txnId, payload, sentAt })),
     }));
   });
 

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildApp } from '../src/app.ts';
-import { PgStore } from '../src/pgStore.ts';
+import type { Relay } from '../src/mailbox.ts';
+import { PgRelay, PgStore } from '../src/pgStore.ts';
 import { MemoryStore, type Store } from '../src/store.ts';
 
 const SECRET = 'test-secret-that-is-at-least-32-characters-long';
@@ -18,17 +19,20 @@ test.after(async () => {
 async function setup() {
   let clock = Date.parse('2026-10-19T10:00:00Z');
   let store: Store;
+  let mailbox: Relay | undefined;
   if (pgUrl) {
     const pg = new PgStore(pgUrl);
     await pg.migrate();
-    await pg.query('truncate transaction_events, transactions, accounts');
+    await pg.query('truncate relay_messages, transaction_events, transactions, accounts');
     store = pg;
+    mailbox = new PgRelay(pg, () => clock);
   } else {
     store = new MemoryStore();
   }
   stores.push(store);
   const app = buildApp({
     store,
+    mailbox,
     secret: SECRET,
     now: () => clock,
     // The fake verifier treats the token as "sub|email".
@@ -169,4 +173,17 @@ test('limits: velocity per card owner, amount cap, no self-requests', async () =
   assert.equal((await ask('v6')).statusCode, 429);
   assert.equal((await ask('big', 10_00_000_01)).statusCode, 400);
   assert.equal((await ask('self', 1000, b.userId)).statusCode, 400);
+});
+
+test('relayed messages are delivered once and expire unread', async () => {
+  const { signIn, tick } = await setup();
+  const a = await signIn('a', 'a@x.com');
+  const b = await signIn('b', 'b@x.com');
+  await a.call('POST', '/v1/mailbox', { to: b.userId, kind: 'card_share', payload: sealed });
+  const t = (await b.call('POST', '/v1/transactions', { lenderId: a.userId, amountMinor: 1000, currency: 'INR', merchant: 'Shop', cardRef: 'c', idempotencyKey: 'k' })).json();
+  await a.call('POST', `/v1/transactions/${t.id}/otp`, { payload: sealed });
+  tick(6 * 60 * 1000); // the OTP's 5 minutes are up; the card share's 24 hours aren't
+  const msgs = (await b.call('GET', '/v1/mailbox')).json().messages;
+  assert.deepEqual(msgs.map((m: { kind: string }) => m.kind), ['card_share']);
+  assert.deepEqual((await b.call('GET', '/v1/mailbox')).json().messages, []);
 });
